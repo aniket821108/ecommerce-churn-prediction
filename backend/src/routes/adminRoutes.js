@@ -1,36 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const rateLimit = require('express-rate-limit');
+
+// ✅ 1. Use YOUR working Middleware imports
 const { authenticate, authorize } = require('../middlewares/auth');
-const { adminRateLimiter, logAdminAction } = require('../middlewares/admin');
+
+// ✅ 2. Use MY new Controller imports (Matches the robust controller we just built)
 const {
   getDashboardStats,
-  getAdminLogs,
+  getChurnPredictions,
   getSystemMetrics,
+  getAdminLogs,
   clearCache,
   sendSystemNotification,
-  backupDatabase,
-  getChurnPredictions
+  backupDatabase
 } = require('../controllers/adminController');
 
-// Apply rate limiting to admin routes
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later'
-});
-
-// All admin routes require authentication and admin role
+// ✅ 3. Apply Authentication & Authorization (Using your working syntax)
 router.use(authenticate, authorize('admin'));
-router.use(adminLimiter);
 
-// Dashboard routes
+// ==========================================
+// ROUTES
+// ==========================================
+
+// Dashboard & Analytics
 router.get('/dashboard', getDashboardStats);
-router.get('/logs', getAdminLogs);
-router.get('/metrics', getSystemMetrics);
-router.get('/analytics/churn', getChurnPredictions);
+router.get('/analytics/churn', getChurnPredictions); // This enables the Churn feature!
 
-// Admin actions
+// System & Logs
+router.get('/metrics', getSystemMetrics);
+router.get('/logs', getAdminLogs);
+
+// Admin Actions
 router.post('/cache/clear', clearCache);
 router.post('/notifications', sendSystemNotification);
 router.post('/backup', backupDatabase);

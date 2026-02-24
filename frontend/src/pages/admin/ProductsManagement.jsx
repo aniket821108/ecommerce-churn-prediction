@@ -4,9 +4,15 @@ import { productService } from '../../services/productService';
 import Loader from '../../components/common/Loader';
 import { PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+// ✅ IMPORT THE NEW FORM COMPONENT
+import ProductForm from '../../components/admin/ProductForm';
 
 const ProductsManagement = () => {
   const [page, setPage] = useState(1);
+  // ✅ ADD STATE FOR MODAL AND EDITING
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -26,15 +32,38 @@ const ProductsManagement = () => {
   });
 
   const products = data?.data?.products || [];
-  const pagination = data?.data?.pagination || {};
+
+  // ✅ HANDLER TO OPEN MODAL FOR NEW PRODUCT
+  const handleAddProduct = () => {
+    setEditingProduct(null); // Clear any previous edit data
+    setIsModalOpen(true);
+  };
+
+  // ✅ HANDLER TO OPEN MODAL FOR EDITING
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setIsModalOpen(true);
+  };
 
   if (isLoading) return <Loader />;
 
   return (
     <div>
+      {/* ✅ RENDER THE MODAL */}
+      <ProductForm 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        productToEdit={editingProduct}
+      />
+
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">Products Management</h2>
-        <button className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+        
+        {/* ✅ BUTTON NOW WORKS */}
+        <button 
+          onClick={handleAddProduct}
+          className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+        >
           <PlusIcon className="h-5 w-5 mr-2" />
           Add Product
         </button>
@@ -44,24 +73,12 @@ const ProductsManagement = () => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Product
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Price
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -84,11 +101,6 @@ const ProductsManagement = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">₹{product.price}</div>
-                  {product.compareAtPrice && (
-                    <div className="text-sm text-gray-500 line-through">
-                      ₹{product.compareAtPrice}
-                    </div>
-                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -110,7 +122,11 @@ const ProductsManagement = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button className="text-blue-600 hover:text-blue-900 mr-3">
+                  {/* ✅ EDIT BUTTON NOW WORKS */}
+                  <button 
+                    onClick={() => handleEditProduct(product)}
+                    className="text-blue-600 hover:text-blue-900 mr-3"
+                  >
                     <PencilIcon className="h-5 w-5" />
                   </button>
                   <button
@@ -129,8 +145,6 @@ const ProductsManagement = () => {
           </tbody>
         </table>
       </div>
-
-      {/* Pagination - implement similarly to Shop page */}
     </div>
   );
 };

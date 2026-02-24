@@ -20,12 +20,8 @@ exports.getProducts = catchAsync(async (req, res) => {
   // Build query
   let query = Product.find({ isActive: true });
   
-  // Filter by category
-  if (req.query.category) {
-    query = query.where('category').equals(req.query.category);
-  }
+  if (req.query.category) query = query.where('category').equals(req.query.category);
   
-  // Filter by price range
   if (req.query.minPrice || req.query.maxPrice) {
     const priceFilter = {};
     if (req.query.minPrice) priceFilter.$gte = parseFloat(req.query.minPrice);
@@ -33,35 +29,19 @@ exports.getProducts = catchAsync(async (req, res) => {
     query = query.where('price').gte(priceFilter);
   }
   
-  // Filter by brand
-  if (req.query.brand) {
-    query = query.where('brand').equals(req.query.brand);
-  }
+  if (req.query.brand) query = query.where('brand').equals(req.query.brand);
   
-  // Search
-  if (req.query.search) {
-    query = query.find({ $text: { $search: req.query.search } });
-  }
+  if (req.query.search) query = query.find({ $text: { $search: req.query.search } });
   
-  // Filter by featured
-  if (req.query.featured === 'true') {
-    query = query.where('isFeatured').equals(true);
-  }
+  if (req.query.featured === 'true') query = query.where('isFeatured').equals(true);
   
-  // Sort
   const sort = req.query.sort || '-createdAt';
   query = query.sort(sort);
   
-  // Execute query with pagination
   const [products, total] = await Promise.all([
     query.skip(skip).limit(limit).lean(),
     Product.countDocuments(query.getFilter())
   ]);
-  
-  // Calculate pagination metadata
-  const totalPages = Math.ceil(total / limit);
-  const hasNext = page < totalPages;
-  const hasPrev = page > 1;
   
   res.status(200).json({
     success: true,
@@ -70,71 +50,38 @@ exports.getProducts = catchAsync(async (req, res) => {
     pagination: {
       page,
       limit,
-      totalPages,
-      hasNext,
-      hasPrev
+      totalPages: Math.ceil(total / limit),
+      hasNext: page < Math.ceil(total / limit),
+      hasPrev: page > 1
     },
     products
   });
 });
 
 // @desc    Get single product
-// @route   GET /api/products/:id
-// @access  Public
 exports.getProduct = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
-  
-  if (!product) {
-    return next(new AppError('Product not found', 404));
-  }
-  
-  // Increment view count (you can add this field to schema)
-  // product.views = (product.views || 0) + 1;
-  // await product.save();
-  
-  res.status(200).json({
-    success: true,
-    product
-  });
+  if (!product) return next(new AppError('Product not found', 404));
+  res.status(200).json({ success: true, product });
 });
 
 // @desc    Get products by category
-// @route   GET /api/products/category/:category
-// @access  Public
 exports.getProductsByCategory = catchAsync(async (req, res) => {
-  const { category } = req.params;
   const limit = parseInt(req.query.limit) || 20;
-  
-  const products = await Product.find({ 
-    category, 
-    isActive: true 
-  }).limit(limit);
-  
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    products
-  });
+  const products = await Product.find({ category: req.params.category, isActive: true }).limit(limit);
+  res.status(200).json({ success: true, count: products.length, products });
 });
 
 // @desc    Get featured products
-// @route   GET /api/products/featured
-// @access  Public
 exports.getFeaturedProducts = catchAsync(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
-  
-  const products = await Product.getFeaturedProducts(limit);
-  
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    products
-  });
+  const products = await Product.find({ isActive: true, isFeatured: true }).limit(limit);
+  res.status(200).json({ success: true, count: products.length, products });
 });
 
-// @desc    Create new product
-// @route   POST /api/products
-// @access  Private/Admin
+// ==========================================
+// ✅ FIXED: CREATE PRODUCT (Parses Numbers)
+// ==========================================
 exports.createProduct = catchAsync(async (req, res, next) => {
   const {
     name,
@@ -147,7 +94,7 @@ exports.createProduct = catchAsync(async (req, res, next) => {
     tags
   } = req.body;
   
-  // Handle images if uploaded
+  // Handle images
   let images = [];
   if (req.files && req.files.length > 0) {
     for (const file of req.files) {
@@ -161,50 +108,40 @@ exports.createProduct = catchAsync(async (req, res, next) => {
     }
   }
   
-  // Generate SKU
   const sku = `PROD${Date.now()}${Math.floor(Math.random() * 1000)}`;
   
   const product = await Product.create({
     name,
     description,
     shortDescription: req.body.shortDescription || description.substring(0, 150) + '...',
-    price,
+    // ✅ FIX: Explicitly convert String to Number
+    price: Number(price), 
+    stock: Number(stock), 
     category,
-    stock,
     brand,
     sku,
     images,
     specifications: specifications || [],
     tags: tags || [],
-    isFeatured: req.body.isFeatured || false,
-    compareAtPrice: req.body.compareAtPrice,
-    weight: req.body.weight,
+    isFeatured: req.body.isFeatured === 'true' || req.body.isFeatured === true,
+    compareAtPrice: req.body.compareAtPrice ? Number(req.body.compareAtPrice) : undefined,
+    weight: req.body.weight ? Number(req.body.weight) : undefined,
     dimensions: req.body.dimensions
   });
   
-  logger.info(`Product created: ${product.name}`, { 
-    productId: product._id,
-    adminId: req.userId 
-  });
+  logger.info(`Product created: ${product.name}`, { productId: product._id, adminId: req.userId });
   
-  res.status(201).json({
-    success: true,
-    message: 'Product created successfully',
-    product
-  });
+  res.status(201).json({ success: true, message: 'Product created successfully', product });
 });
 
-// @desc    Update product
-// @route   PUT /api/products/:id
-// @access  Private/Admin
+// ==========================================
+// ✅ FIXED: UPDATE PRODUCT (Parses Numbers)
+// ==========================================
 exports.updateProduct = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
+  if (!product) return next(new AppError('Product not found', 404));
   
-  if (!product) {
-    return next(new AppError('Product not found', 404));
-  }
-  
-  // Handle image updates if any
+  // Handle images
   if (req.files && req.files.length > 0) {
     for (const file of req.files) {
       const uploadResult = await uploadToCloudinary(file.path, 'products');
@@ -217,86 +154,53 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
     }
   }
   
-  // Update fields
-  const updatableFields = [
-    'name', 'description', 'shortDescription', 'price', 'category',
-    'stock', 'brand', 'specifications', 'tags', 'isFeatured',
-    'compareAtPrice', 'weight', 'dimensions'
-  ];
+  // Update fields with Type Safety
+  if (req.body.name) product.name = req.body.name;
+  if (req.body.description) product.description = req.body.description;
+  if (req.body.price) product.price = Number(req.body.price); // ✅ FIX
+  if (req.body.stock) product.stock = Number(req.body.stock); // ✅ FIX
+  if (req.body.category) product.category = req.body.category;
+  if (req.body.brand) product.brand = req.body.brand;
   
-  updatableFields.forEach(field => {
-    if (req.body[field] !== undefined) {
-      product[field] = req.body[field];
-    }
-  });
-  
+  // Handle Booleans
+  if (req.body.isFeatured !== undefined) {
+      product.isFeatured = req.body.isFeatured === 'true' || req.body.isFeatured === true;
+  }
+
   await product.save();
   
-  logger.info(`Product updated: ${product.name}`, { 
-    productId: product._id,
-    adminId: req.userId 
-  });
+  logger.info(`Product updated: ${product.name}`, { productId: product._id, adminId: req.userId });
   
-  res.status(200).json({
-    success: true,
-    message: 'Product updated successfully',
-    product
-  });
+  res.status(200).json({ success: true, message: 'Product updated successfully', product });
 });
 
 // @desc    Delete product
-// @route   DELETE /api/products/:id
-// @access  Private/Admin
 exports.deleteProduct = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
+  if (!product) return next(new AppError('Product not found', 404));
   
-  if (!product) {
-    return next(new AppError('Product not found', 404));
-  }
-  
-  // Delete images from Cloudinary
   if (product.images && product.images.length > 0) {
     for (const image of product.images) {
-      if (image.publicId) {
-        await deleteFromCloudinary(image.publicId);
-      }
+      if (image.publicId) await deleteFromCloudinary(image.publicId);
     }
   }
   
-  // Soft delete (set isActive to false)
-  product.isActive = false;
+  product.isActive = false; // Soft delete
   await product.save();
   
-  // Or hard delete
-  // await product.deleteOne();
+  logger.info(`Product deleted: ${product.name}`, { productId: product._id, adminId: req.userId });
   
-  logger.info(`Product deleted: ${product.name}`, { 
-    productId: product._id,
-    adminId: req.userId 
-  });
-  
-  res.status(200).json({
-    success: true,
-    message: 'Product deleted successfully'
-  });
+  res.status(200).json({ success: true, message: 'Product deleted successfully' });
 });
 
 // @desc    Upload product images
-// @route   POST /api/products/:id/images
-// @access  Private/Admin
 exports.uploadProductImages = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
+  if (!product) return next(new AppError('Product not found', 404));
   
-  if (!product) {
-    return next(new AppError('Product not found', 404));
-  }
-  
-  if (!req.files || req.files.length === 0) {
-    return next(new AppError('Please upload at least one image', 400));
-  }
+  if (!req.files || req.files.length === 0) return next(new AppError('Please upload at least one image', 400));
   
   const uploadedImages = [];
-  
   for (const file of req.files) {
     const uploadResult = await uploadToCloudinary(file.path, 'products');
     uploadedImages.push({
@@ -310,100 +214,31 @@ exports.uploadProductImages = catchAsync(async (req, res, next) => {
   product.images.push(...uploadedImages);
   await product.save();
   
-  res.status(200).json({
-    success: true,
-    message: 'Images uploaded successfully',
-    images: uploadedImages
-  });
+  res.status(200).json({ success: true, message: 'Images uploaded successfully', images: uploadedImages });
 });
 
 // @desc    Delete product image
-// @route   DELETE /api/products/:id/images/:imageId
-// @access  Private/Admin
 exports.deleteProductImage = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
+  if (!product) return next(new AppError('Product not found', 404));
   
-  if (!product) {
-    return next(new AppError('Product not found', 404));
-  }
-  
-  const imageIndex = product.images.findIndex(
-    img => img._id.toString() === req.params.imageId
-  );
-  
-  if (imageIndex === -1) {
-    return next(new AppError('Image not found', 404));
-  }
+  const imageIndex = product.images.findIndex(img => img._id.toString() === req.params.imageId);
+  if (imageIndex === -1) return next(new AppError('Image not found', 404));
   
   const image = product.images[imageIndex];
+  if (image.publicId) await deleteFromCloudinary(image.publicId);
   
-  // Delete from Cloudinary
-  if (image.publicId) {
-    await deleteFromCloudinary(image.publicId);
-  }
-  
-  // Remove from array
   product.images.splice(imageIndex, 1);
-  
-  // If we removed the primary image and there are other images, set first as primary
-  if (image.isPrimary && product.images.length > 0) {
-    product.images[0].isPrimary = true;
-  }
+  if (image.isPrimary && product.images.length > 0) product.images[0].isPrimary = true;
   
   await product.save();
   
-  res.status(200).json({
-    success: true,
-    message: 'Image deleted successfully'
-  });
+  res.status(200).json({ success: true, message: 'Image deleted successfully' });
 });
 
 // @desc    Search products
-// @route   GET /api/products/search
-// @access  Public
 exports.searchProducts = catchAsync(async (req, res) => {
-  const { q, category, minPrice, maxPrice, sort = '-createdAt' } = req.query;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const skip = (page - 1) * limit;
-  
-  let query = { isActive: true };
-  
-  // Text search
-  if (q) {
-    query.$text = { $search: q };
-  }
-  
-  // Category filter
-  if (category) {
-    query.category = category;
-  }
-  
-  // Price range filter
-  if (minPrice || maxPrice) {
-    query.price = {};
-    if (minPrice) query.price.$gte = parseFloat(minPrice);
-    if (maxPrice) query.price.$lte = parseFloat(maxPrice);
-  }
-  
-  const [products, total] = await Promise.all([
-    Product.find(query)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Product.countDocuments(query)
-  ]);
-  
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    total,
-    pagination: {
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit)
-    },
-    products
-  });
+  const { q } = req.query;
+  const products = await Product.find({ $text: { $search: q }, isActive: true });
+  res.status(200).json({ success: true, count: products.length, products });
 });

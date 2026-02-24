@@ -1,72 +1,47 @@
-import { createBrowserRouter } from "react-router-dom";
-import App from "./App";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Shop from "./pages/Shop";
-import ProductDetail from "./pages/ProductDetail";
-import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
-import Profile from "./pages/Profile";
-import Orders from "./pages/Orders";
-import OrderDetail from "./pages/OrderDetail";
+import { NavLink } from 'react-router-dom';
+import {
+  HomeIcon,
+  ShoppingBagIcon,
+  ShoppingCartIcon,
+  UsersIcon,
+  ChartBarIcon, // For Churn Analytics
+} from '@heroicons/react/24/outline';
 
-// ✅ ADMIN IMPORTS
-import AdminRoute from "./components/common/AdminRoute";
-import Dashboard from "./pages/admin/Dashboard";
-import ProductsManagement from "./pages/admin/ProductsManagement";
-import OrdersManagement from "./pages/admin/OrdersManagement";
-import UsersManagement from "./pages/admin/UsersManagement";
-import ChurnAnalytics from "./pages/admin/ChurnAnalytics";
-import AdminSidebar from "./components/admin/AdminSidebar"; 
-import { Outlet } from "react-router-dom";
+const AdminSidebar = () => {
+  const navItems = [
+    { path: '/admin', label: 'Dashboard', icon: HomeIcon, end: true }, // "end" makes it active only on exact match
+    { path: '/admin/products', label: 'Products', icon: ShoppingBagIcon },
+    { path: '/admin/orders', label: 'Orders', icon: ShoppingCartIcon },
+    { path: '/admin/users', label: 'Users', icon: UsersIcon },
+    { path: '/admin/churn', label: 'Churn Analytics', icon: ChartBarIcon },
+  ];
 
-// ✅ ADMIN LAYOUT: This adds the Sidebar to every admin page automatically!
-const AdminLayout = () => (
-  <div className="flex min-h-screen bg-gray-50">
-    {/* The Sidebar */}
-    <AdminSidebar />
-    
-    {/* The Page Content (pushed right by ml-64 to make room for sidebar) */}
-    <div className="flex-1 p-8 ml-64 transition-all duration-300">
-      <Outlet />
-    </div>
-  </div>
-);
+  return (
+    <aside className="w-64 bg-white shadow-md min-h-screen fixed left-0 top-0 pt-16 z-40">
+      <div className="p-6">
+        <h2 className="text-xl font-bold text-blue-600 tracking-wide uppercase text-sm">Admin Panel</h2>
+      </div>
+      <nav className="mt-2 space-y-1">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.end}
+            className={({ isActive }) =>
+              `flex items-center px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                isActive 
+                  ? 'bg-blue-50 text-blue-600 border-r-4 border-blue-600' 
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`
+            }
+          >
+            <item.icon className="h-5 w-5 mr-3" />
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+    </aside>
+  );
+};
 
-export const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <App />,
-    children: [
-      // User Routes
-      { index: true, element: <Home /> },
-      { path: "login", element: <Login /> },
-      { path: "register", element: <Register /> },
-      { path: "shop", element: <Shop /> },
-      { path: "product/:id", element: <ProductDetail /> },
-      { path: "cart", element: <Cart /> },
-      { path: "checkout", element: <Checkout /> },
-      { path: "profile", element: <Profile /> },
-      { path: "orders", element: <Orders /> },
-      { path: "order/:id", element: <OrderDetail /> },
-      
-      // ✅ ADMIN ROUTES (Wrapped in AdminLayout)
-      {
-        path: "admin",
-        element: (
-          <AdminRoute>
-            <AdminLayout />
-          </AdminRoute>
-        ),
-        children: [
-          { path: "dashboard", element: <Dashboard /> },
-          { path: "products", element: <ProductsManagement /> },
-          { path: "orders", element: <OrdersManagement /> },
-          { path: "users", element: <UsersManagement /> },
-          { path: "churn-analytics", element: <ChurnAnalytics /> },
-        ],
-      },
-    ],
-  },
-]);
+export default AdminSidebar;

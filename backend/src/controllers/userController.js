@@ -2,6 +2,8 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
+// ✅ IMPORT CLOUDINARY UPLOAD FUNCTION
+const { uploadToCloudinary } = require('../config/cloudinary');
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
@@ -11,7 +13,7 @@ exports.getUserProfile = catchAsync(async (req, res) => {
   
   res.status(200).json({
     success: true,
-    user: user.toSafeObject()
+    user: user.toSafeObject ? user.toSafeObject() : user // Fallback if method missing
   });
 });
 
@@ -20,33 +22,65 @@ exports.getUserProfile = catchAsync(async (req, res) => {
 // @access  Private
 exports.updateUserProfile = catchAsync(async (req, res, next) => {
   const { name, email, phone, address } = req.body;
-  
-  // Check if email is being changed and if it's already taken
-  if (email && email !== req.user.email) {
+  const user = await User.findById(req.userId);
+
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+
+  // 1. Check if email is being changed and if it's already taken
+  if (email && email !== user.email) {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return next(new AppError('Email already in use', 400));
     }
   }
-  
-  const user = await User.findByIdAndUpdate(
-    req.userId,
-    {
-      name: name || req.user.name,
-      email: email || req.user.email,
-      phone: phone || req.user.phone,
-      address: address || req.user.address
-    },
-    {
-      new: true,
-      runValidators: true
+
+  // ✅ 2. HANDLE IMAGE UPLOAD (If a file was sent)
+  if (req.file) {
+    try {
+      const uploadResult = await uploadToCloudinary(req.file.path, 'avatars');
+      
+      // Update avatar field
+      user.avatar = {
+        url: uploadResult.url,
+        publicId: uploadResult.public_id
+      };
+    } catch (error) {
+      console.error("Profile Image Upload Failed:", error);
+      return next(new AppError('Failed to upload profile image', 500));
     }
-  );
+  }
+
+  // 3. Update Text Fields
+  if (name) user.name = name;
+  if (email) user.email = email;
+  if (phone) user.phone = phone;
   
+  // Handle nested address object carefully
+  if (address) {
+    // If address is sent as a string (JSON), parse it
+    // If sent as individual fields via FormData (e.g., address[city]), Express handles it differently
+    // This logic supports both JSON body and FormData structure
+    if (typeof address === 'string') {
+        try {
+            user.address = JSON.parse(address);
+        } catch (e) {
+             // If parsing fails, it might just be a simple string assignment or invalid
+             console.error("Address parsing error", e);
+        }
+    } else {
+        // Merge existing address with new updates
+        user.address = { ...user.address, ...address };
+    }
+  }
+
+  await user.save();
+
   res.status(200).json({
     success: true,
     message: 'Profile updated successfully',
-    user: user.toSafeObject()
+    user: user.toSafeObject ? user.toSafeObject() : user
   });
 });
 
@@ -58,8 +92,12 @@ exports.getUserOrders = catchAsync(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const status = req.query.status;
   
-  const orders = await Order.findByUser(req.userId, { page, limit, status });
-  
+  // Assuming Order.findByUser is a static method you created. 
+  // If not, use Order.find({ user: req.userId })
+  const orders = Order.findByUser 
+    ? await Order.findByUser(req.userId, { page, limit, status })
+    : await Order.find({ user: req.userId }).sort({ createdAt: -1 }).limit(limit).skip((page - 1) * limit);
+
   res.status(200).json({
     success: true,
     count: orders.length,
@@ -153,7 +191,7 @@ exports.getUserById = catchAsync(async (req, res, next) => {
       $group: {
         _id: null,
         totalOrders: { $sum: 1 },
-        totalSpent: { $sum: '$total' },
+        totalSpent: { $sum: '$total' }, // Check if your schema uses 'total' or 'totalPrice'
         avgOrderValue: { $avg: '$total' }
       }
     }
@@ -208,7 +246,7 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: 'User updated successfully',
-    user: user.toSafeObject()
+    user: user.toSafeObject ? user.toSafeObject() : user
   });
 });
 
@@ -230,9 +268,6 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
   // Soft delete (set isActive to false)
   user.isActive = false;
   await user.save();
-  
-  // Or hard delete
-  // await user.deleteOne();
   
   logger.info(`User deactivated by admin`, { 
     userId: user._id,
