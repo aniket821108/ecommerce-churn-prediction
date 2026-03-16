@@ -55,10 +55,10 @@ const orderSchema = new mongoose.Schema({
   
   payment: {
     method: {
-      type: String,
-      enum: ['credit_card', 'debit_card', 'paypal', 'cash_on_delivery'],
-      required: true
-    },
+  type: String,
+  enum: ['credit_card', 'debit_card', 'paypal', 'cash_on_delivery', 'stripe', 'razorpay']
+  // ✅ razorpay add kiya
+},
     status: {
       type: String,
       enum: ['pending', 'completed', 'failed', 'refunded'],

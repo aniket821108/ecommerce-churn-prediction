@@ -24,9 +24,9 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/'); // Save temp file to 'uploads' folder
   },
-  filename: function (req, file, cb) {
-    cb(null, `user-${req.user.id}-${Date.now()}-${file.originalname}`);
-  }
+ filename: function (req, file, cb) {
+  cb(null, `user-${req.userId}-${Date.now()}-${file.originalname}`);
+}
 });
 
 // Filter to accept only images

@@ -33,11 +33,10 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
   
-  avatar: {
-    type: String,
-    default: null
-  },
-  
+avatar: {
+  url: { type: String, default: null },
+  publicId: { type: String, default: null }
+},  
   address: {
     street: { type: String, trim: true },
     city: { type: String, trim: true },
