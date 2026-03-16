@@ -1,5 +1,6 @@
 const path = require('path');
 const mongoose = require('mongoose');
+const { spawn } = require('child_process');
 
 // ===============================
 // Load Environment Variables
@@ -35,6 +36,71 @@ process.on('uncaughtException', (err) => {
 });
 
 // ===============================
+// Python ML Warmup
+// ===============================
+const warmupPython = () => {
+  const script = path.join(__dirname, '../ml-models/predict.py');
+
+  const proc = spawn('python', [script]);
+
+  proc.stdin.write(JSON.stringify({
+    AccountAgeMonths: 6,
+    TotalSpend: 1000,
+    MonthlySpend: 166,
+    IsSeniorCitizen: 0,
+    HasPartner: 0,
+    HasDependents: 0,
+    HasMobileApp: 1,
+    UsesMultipleDevices: 1,
+    HasTwoFactorAuth: 0,
+    UsesWishlist: 0,
+    HasPurchaseProtection: 0,
+    UsesCustomerSupport: 0,
+    WatchesProductVideos: 0,
+    WatchesLiveStreaming: 0,
+    UsesPaperlessBilling: 1,
+    Gender_Male: 0,
+    PreferredDevice_Mobile: 1,
+    PreferredDevice_Tablet: 0,
+    'MembershipType_One year': 0,
+    'MembershipType_Two year': 0,
+    'PreferredPaymentMethod_Credit card': 1,
+    'PreferredPaymentMethod_Digital wallet': 0,
+  }));
+  proc.stdin.end();
+
+  proc.stdout.on('data', (data) => {
+    try {
+      const result = JSON.parse(data.toString().trim());
+      if (result.success) {
+        console.log('✅ Python ML model warmed up successfully');
+      } else {
+        console.log('⚠️ Python warmup ran but returned error:', result.error);
+      }
+    } catch {
+      console.log('✅ Python ML process started');
+    }
+  });
+
+  proc.stderr.on('data', (data) => {
+    // Ignore stderr warnings (sklearn version warnings etc.)
+  });
+
+  proc.on('error', (err) => {
+    // Try python3 if python not found
+    if (err.code === 'ENOENT') {
+      const proc3 = spawn('python3', [script]);
+      proc3.stdin.write(JSON.stringify({ AccountAgeMonths: 6, TotalSpend: 1000, MonthlySpend: 166 }));
+      proc3.stdin.end();
+      proc3.stdout.on('data', () => console.log('✅ Python3 ML model warmed up'));
+      proc3.on('error', () => console.log('⚠️ Python not found — ML fallback heuristic will be used'));
+    } else {
+      console.log('⚠️ Python warmup failed:', err.message);
+    }
+  });
+};
+
+// ===============================
 // Start Server
 // ===============================
 const startServer = async () => {
@@ -54,6 +120,9 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌍 Mode: ${process.env.NODE_ENV || 'development'}`);
       console.log("=================================");
+
+      // ✅ Warm up Python ML model on server start
+      warmupPython();
     });
 
     process.on('unhandledRejection', (err) => {
