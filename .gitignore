@@ -88,3 +88,5 @@ temp/
 # 🔑 Coverage
 ############################
 coverage/
+#########################
+backend/uploads/
