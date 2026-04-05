@@ -40,8 +40,11 @@ process.on('uncaughtException', (err) => {
 // ===============================
 const warmupPython = () => {
   const script = path.join(__dirname, '../ml-models/predict.py');
+  const pythonCmd = process.platform === 'win32'
+    ? 'C:\\Users\\anike\\.conda\\envs\\myenv\\python.exe'
+    : 'python3';
 
-  const proc = spawn('python', [script]);
+  const proc = spawn(pythonCmd, [script]);
 
   proc.stdin.write(JSON.stringify({
     AccountAgeMonths: 6,
@@ -87,16 +90,8 @@ const warmupPython = () => {
   });
 
   proc.on('error', (err) => {
-    // Try python3 if python not found
-    if (err.code === 'ENOENT') {
-      const proc3 = spawn('python3', [script]);
-      proc3.stdin.write(JSON.stringify({ AccountAgeMonths: 6, TotalSpend: 1000, MonthlySpend: 166 }));
-      proc3.stdin.end();
-      proc3.stdout.on('data', () => console.log('✅ Python3 ML model warmed up'));
-      proc3.on('error', () => console.log('⚠️ Python not found — ML fallback heuristic will be used'));
-    } else {
-      console.log('⚠️ Python warmup failed:', err.message);
-    }
+    console.log('⚠️ Python warmup failed:', err.message);
+    console.log('   Make sure conda myenv is active');
   });
 };
 
