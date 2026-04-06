@@ -4,50 +4,33 @@ import authService from '../services/authService';
 
 const useAuthStore = create(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
 
-      login: async (email, password) => {
-        const response = await authService.login({ email, password });
-        const { user, tokens } = response.data;
-        localStorage.setItem('accessToken', tokens.accessToken);
-        localStorage.setItem('refreshToken', tokens.refreshToken);
-        set({ 
-          user, 
-          accessToken: tokens.accessToken, 
-          refreshToken: tokens.refreshToken, 
-          isAuthenticated: true 
-        });
-        return response;
+      // ✅ Called from OtpVerify + Login pages directly with user+token
+      login: (user, token) => {
+        localStorage.setItem('accessToken', token);
+        set({ user, accessToken: token, isAuthenticated: true });
       },
 
-      register: async (userData) => {
-        const response = await authService.register(userData);
-        const { user, tokens } = response.data;
-        localStorage.setItem('accessToken', tokens.accessToken);
-        localStorage.setItem('refreshToken', tokens.refreshToken);
-        set({ 
-          user, 
-          accessToken: tokens.accessToken, 
-          refreshToken: tokens.refreshToken, 
-          isAuthenticated: true 
-        });
+      // ✅ Called from Login.jsx — fetches via authService
+      loginWithCredentials: async (email, password) => {
+        const response = await authService.login({ email, password });
+        // Backend returns: { success: true, token, user }
+        const { token, user } = response.data;
+        localStorage.setItem('accessToken', token);
+        set({ user, accessToken: token, isAuthenticated: true });
         return response;
       },
 
       logout: async () => {
-        try {
-          await authService.logout();
-        } catch (error) {
-          console.error('Logout error:', error);
-        } finally {
+        try { await authService.logout(); } catch (_) {}
+        finally {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
+          set({ user: null, accessToken: null, isAuthenticated: false });
           window.location.href = '/';
         }
       },
@@ -56,11 +39,11 @@ const useAuthStore = create(
         try {
           const token = localStorage.getItem('accessToken');
           if (!token) return;
-          
           const response = await authService.getMe();
           set({ user: response.data.user, isAuthenticated: true });
-        } catch (error) {
-          set({ user: null, isAuthenticated: false });
+        } catch (_) {
+          localStorage.removeItem('accessToken');
+          set({ user: null, accessToken: null, isAuthenticated: false });
         }
       },
 
@@ -70,18 +53,14 @@ const useAuthStore = create(
         return response;
       },
 
-      updatePassword: async (data) => {
-        return await authService.updatePassword(data);
-      }
+      updatePassword: async (data) => authService.updatePassword(data),
     }),
     {
       name: 'auth-storage',
-      getStorage: () => localStorage,
-      partialize: (state) => ({ 
-        user: state.user, 
-        accessToken: state.accessToken, 
-        refreshToken: state.refreshToken, 
-        isAuthenticated: state.isAuthenticated 
+      partialize: (state) => ({
+        user:            state.user,
+        accessToken:     state.accessToken,
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )

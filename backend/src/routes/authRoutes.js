@@ -1,39 +1,25 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const { authenticate } = require('../middlewares/auth');
-const { validationSchemas, validate } = require('../middlewares/validation');
 const {
-  register,
+  sendOtp,
+  verifyOtp,
+  resendOtp,
   login,
   logout,
   getMe,
-  updateDetails,
   updatePassword,
-  refreshToken
 } = require('../controllers/authController');
 
-//Public routes
-router.post(
-  '/register',
-  validationSchemas.register,
-  validate,
-  register
-);
+// ── OTP Registration Flow ─────────────────────────────
+router.post('/send-otp',   sendOtp);    // Step 1: Send OTP
+router.post('/verify-otp', verifyOtp);  // Step 2: Verify OTP → create account
+router.post('/resend-otp', resendOtp);  // Resend OTP
 
-
-router.post(
-  '/login',
-  validationSchemas.login,
-  validate,
-  login
-);
-
-router.post('/refresh', refreshToken);
-
-// Protected routes
-router.get('/logout', authenticate, logout);
-router.get('/me', authenticate, getMe);
-router.put('/update', authenticate, updateDetails);
+// ── Standard Auth ─────────────────────────────────────
+router.post('/login',  login);
+router.get('/logout',  authenticate, logout);
+router.get('/me',      authenticate, getMe);
 router.put('/update-password', authenticate, updatePassword);
 
 module.exports = router;
