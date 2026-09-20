@@ -31,7 +31,6 @@ RUN npm ci --production
 # Copy backend source
 COPY backend/src/ ./src/
 COPY backend/ml-models/ ./ml-models/
-COPY backend/nodemon.json ./
 
 # Copy built frontend to serve as static files
 COPY --from=frontend-build /app/frontend/dist ./public
