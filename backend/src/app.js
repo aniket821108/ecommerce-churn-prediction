@@ -69,6 +69,8 @@ app.get('/health', (req, res) => {
   });
 });
 
+const path = require('path');
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -77,7 +79,19 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/cart', cartRoutes);
 
-// 404 handler
+// ── Serve Frontend in Production ──────────────────────────
+// In production, the built React app is served from /public
+if (process.env.NODE_ENV === 'production') {
+  const publicPath = path.join(__dirname, '..', 'public');
+  app.use(express.static(publicPath));
+
+  // Any route that doesn't match an API route serves the React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(publicPath, 'index.html'));
+  });
+}
+
+// 404 handler (only hits for API routes in production)
 app.use(notFound);
 
 // Global error handler
