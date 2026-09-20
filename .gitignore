@@ -4,6 +4,9 @@
 .env
 .env.*
 *.env
+# Allow .env.example templates for project setup
+!.env.example
+!**/.env.example
 
 ############################
 # 📦 Node Modules
@@ -50,6 +53,10 @@ __pycache__/
 *.onnx
 *.model
 
+# Allow ML model files needed for the app to work
+!backend/ml-models/*.pkl
+!backend/ml-models/features_list.json
+
 venv/
 env/
 .venv/
@@ -63,7 +70,10 @@ datasets/
 *.xlsx
 *.json
 
-# (If you want to keep small JSON configs, remove *.json)
+# Allow JSON config files needed by the app
+!backend/ml-models/features_list.json
+!**/package.json
+!**/package-lock.json
 
 ############################
 # 🖥 OS Files
@@ -90,6 +100,12 @@ temp/
 coverage/
 #########################
 backend/uploads/
+#########################
+# Sensitive information files (keys, credentials)
+IMPORTANT_INFORMATION/
+#########################
+# College project documents (private)
+document/
 #########################
 ml-service/venv/
 ml-service/__pycache__/

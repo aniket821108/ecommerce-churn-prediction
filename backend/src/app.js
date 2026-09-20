@@ -27,14 +27,15 @@ app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
 
-// CORS configuration
+// CORS configuration — use ALLOWED_ORIGINS env var in production
 const corsOptions = {
-  // Allow both 5173 (default) and 5174 (current)
-  origin: [
-    "http://localhost:5173", 
-    "http://localhost:5174",
-    process.env.FRONTEND_URL 
-  ].filter(Boolean), // This cleans up any empty values
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+    : [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        process.env.FRONTEND_URL,
+      ].filter(Boolean),
   credentials: true,
   optionsSuccessStatus: 200
 };

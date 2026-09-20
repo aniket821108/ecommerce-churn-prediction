@@ -20,33 +20,19 @@ api.interceptors.request.use(
 );
 
 // Response interceptor
+// Response interceptor — handle errors globally
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/auth/refresh`,
-          { refreshToken },
-          { withCredentials: true }
-        );
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+    // ✅ Clear tokens and redirect on 401 (avoid refresh loops)
+    if (error.response?.status === 401) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      // Only redirect if not already on login page
+      if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
-        toast.error('Session expired. Please login again.');
-        return Promise.reject(refreshError);
       }
+      return Promise.reject(error);
     }
 
     const message = error.response?.data?.message || 'Something went wrong';

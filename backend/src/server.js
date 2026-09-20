@@ -10,7 +10,7 @@ require('dotenv').config({
 });
 
 console.log("📦 ENV Loaded");
-console.log("🔎 MONGODB_URI:", process.env.MONGODB_URI || "❌ Not Found");
+console.log("🔎 MONGODB_URI:", process.env.MONGODB_URI ? "✅ Found" : "❌ Not Found");
 
 // ===============================
 // Set Mongo URI (Env OR Fallback)
@@ -40,10 +40,8 @@ process.on('uncaughtException', (err) => {
 // ===============================
 const warmupPython = () => {
   const script = path.join(__dirname, '../ml-models/predict.py');
-  const pythonCmd = process.platform === 'win32'
-    ? 'C:\\Users\\anike\\.conda\\envs\\myenv\\python.exe'
-    : 'python3';
-
+  // Use PYTHON_CMD env var for deployment, fallback to python3
+  const pythonCmd = process.env.PYTHON_CMD || 'python3';
   const proc = spawn(pythonCmd, [script]);
 
   proc.stdin.write(JSON.stringify({

@@ -1,0 +1,27 @@
+{
+  "features": [
+    "IsSeniorCitizen",
+    "HasPartner",
+    "HasDependents",
+    "AccountAgeMonths",
+    "HasMobileApp",
+    "UsesMultipleDevices",
+    "HasTwoFactorAuth",
+    "UsesWishlist",
+    "HasPurchaseProtection",
+    "UsesCustomerSupport",
+    "WatchesProductVideos",
+    "WatchesLiveStreaming",
+    "UsesPaperlessBilling",
+    "MonthlySpend",
+    "TotalSpend",
+    "Gender_Male",
+    "PreferredDevice_Mobile",
+    "PreferredDevice_Tablet",
+    "MembershipType_One year",
+    "MembershipType_Two year",
+    "PreferredPaymentMethod_Credit card",
+    "PreferredPaymentMethod_Digital wallet"
+  ],
+  "count": 22
+}

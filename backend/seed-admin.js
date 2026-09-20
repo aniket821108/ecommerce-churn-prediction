@@ -1,32 +1,37 @@
 const mongoose = require('mongoose');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, 'backend', '.env') });
+require('dotenv').config({ path: path.join(__dirname, 'src', '.env') });
 
-const MONGODB_URI = "mongodb://127.0.0.1:27017/ecommerce";
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ecommerce';
 
 mongoose.connect(MONGODB_URI).then(async () => {
-  const User = require('./backend/src/models/User');
-  let admin = await User.findOne({ email: 'aniketkumar821108@gmail.com' });
+  console.log('✅ Connected to MongoDB');
+  const User = require('./src/models/User');
+  
+  const adminEmail = process.env.ADMIN_EMAIL || 'aniketkumar821108@gmail.com';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Aniket123@';
+
+  let admin = await User.findOne({ email: adminEmail });
   
   if (!admin) {
     admin = new User({
         name: 'Aniket Admin',
-        email: 'aniketkumar821108@gmail.com',
-        password: 'aniket123@',
+        email: adminEmail,
+        password: adminPassword,
         role: 'admin',
         isVerified: true,
         phone: '1112223334'
     });
     await admin.save({ validateBeforeSave: false });
-    console.log("✅ Admin user seeded uniquely for this test.");
+    console.log('✅ Admin user created successfully.');
   } else {
     admin.isVerified = true;
-    admin.password = 'aniket123@'; // Ensuring password matches user request
+    admin.password = adminPassword;
     await admin.save({ validateBeforeSave: false });
-    console.log("✅ Existing admin user updated and verified for this test.");
+    console.log('✅ Existing admin user updated and verified.');
   }
   process.exit(0);
 }).catch(err => {
-    console.error("DB connection error:", err);
+    console.error('❌ DB connection error:', err.message);
     process.exit(1);
 });

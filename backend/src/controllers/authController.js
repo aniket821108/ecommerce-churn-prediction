@@ -5,10 +5,15 @@ const jwt     = require('jsonwebtoken');
 const { catchAsync } = require('../middlewares/errorHandler');
 const { sendEmail }  = require('../services/emailService');
 const logger  = require('../utils/logger');
+const { validateEmail, validatePassword, validatePhone, sanitizeInput } = require('../utils/validators');
 
 // ── JWT Helper ────────────────────────────────────────
 const signToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
+  jwt.sign(
+    { id },
+    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_ACCESS_EXPIRE || process.env.JWT_EXPIRE || '7d' }
+  );
 
 const createSendToken = (user, statusCode, res) => {
   const token = signToken(user._id);
@@ -34,15 +39,22 @@ const generateOTP = () =>
 exports.sendOtp = catchAsync(async (req, res) => {
   const { name, email, password, phone } = req.body;
 
-  // ── Validate required fields ──
   if (!name || !email || !password || !phone) {
     return res.status(400).json({ success: false, message: 'All fields are required' });
   }
-  if (password.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+
+  if (!validateEmail(email)) {
+    return res.status(400).json({ success: false, message: 'Invalid email format' });
   }
-  if (!/^\d{10}$/.test(phone)) {
-    return res.status(400).json({ success: false, message: 'Phone must be exactly 10 digits' });
+
+  const passValidation = validatePassword(password);
+  if (!passValidation.isValid) {
+    const errorMsg = Object.values(passValidation.errors).find(e => e);
+    return res.status(400).json({ success: false, message: errorMsg || 'Invalid password' });
+  }
+
+  if (!validatePhone(phone)) {
+    return res.status(400).json({ success: false, message: 'Invalid phone number format (must be 10 digits starting with 6-9)' });
   }
 
   // ── Check if email already registered ──
@@ -205,6 +217,10 @@ exports.login = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
   }
 
+  if (!validateEmail(email)) {
+    return res.status(400).json({ success: false, message: 'Invalid email format' });
+  }
+
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
   if (!user || !user.isActive) {
     return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -248,6 +264,16 @@ exports.logout = catchAsync(async (req, res) => {
 // ══════════════════════════════════════════════════════
 exports.updatePassword = catchAsync(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Current and new password are required' });
+  }
+
+  const passValidation = validatePassword(newPassword);
+  if (!passValidation.isValid) {
+    const errorMsg = Object.values(passValidation.errors).find(e => e);
+    return res.status(400).json({ success: false, message: errorMsg || 'Invalid new password' });
+  }
 
   const user = await User.findById(req.userId).select('+password');
   if (!user) {

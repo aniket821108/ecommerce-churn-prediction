@@ -1,113 +1,203 @@
-# Hi there, I'm Aniket Kumar 👋
+# 🛒 E-Shop — AI-Powered E-Commerce Platform
 
-<div align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=28&duration=3000&pause=1000&color=7C3AED&center=true&vCenter=true&width=600&lines=Full+Stack+Developer;AI+%2F+ML+Enthusiast;Building+Real-World+Projects" alt="Typing SVG" />
-</div>
+A full-stack e-commerce platform with **ML-driven customer churn prediction**, real-time analytics, OTP-based authentication, and Razorpay payment integration.
 
-<br/>
-
-<div align="center">
-  <img src="https://komarev.com/ghpvc/?username=aniket821108&color=7c3aed&style=for-the-badge&label=PROFILE+VIEWS" alt="Profile Views" />
-  <img src="https://img.shields.io/github/followers/aniket821108?style=for-the-badge&color=7c3aed&labelColor=1a1a2e" alt="Followers" />
-</div>
+> Built as a capstone project demonstrating full-stack development, machine learning integration, and production-ready architecture.
 
 ---
 
-## 🚀 About Me
+## ✨ Key Features
 
-```javascript
-const aniket = {
-  location:   "Mizoram, India 🇮🇳",
-  education:  "B.Tech — Semester 6",
-  passion:    ["Full Stack Development", "AI/ML", "DSA"],
-  currentProject: "E-Commerce Platform with Churn Prediction AI",
-  funFact:    "I turn coffee ☕ into code 💻"
-};
+### 🛍️ Customer-Facing
+- **Product Catalog** — Browse, search, and filter products with detailed views
+- **Shopping Cart** — Persistent cart with real-time price calculations
+- **Multi-Step Checkout** — Shipping → Billing → Payment → Review flow
+- **Razorpay Payments** — Secure online payments with UPI, cards, and wallets
+- **Cash on Delivery** — Alternative payment option
+- **Order Tracking** — View order history and real-time status updates
+- **OTP Verification** — Email-based OTP for secure user registration
+- **User Profile** — Manage account details, addresses, and password
+
+### 📊 Admin Dashboard
+- **Dashboard Analytics** — Total users, orders, revenue, and recent activity
+- **Product Management** — Full CRUD with Cloudinary image uploads
+- **Order Management** — Update order status, view payment details
+- **User Management** — View, manage, and monitor customer accounts
+- **🧠 AI Churn Prediction** — XGBoost ML model predicts customer churn risk with probability scores
+
+### 🔒 Security
+- JWT authentication (Bearer token + HTTP-only cookies)
+- Helmet, XSS protection, mongo sanitization, HPP
+- Rate limiting on API endpoints
+- Input validation with express-validator and Zod
+
+---
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Vite, Tailwind CSS 4, Zustand, React Query, React Router 7 |
+| **Backend** | Node.js, Express.js, MongoDB (Mongoose), JWT |
+| **ML Model** | Python, XGBoost, scikit-learn, pandas |
+| **Payments** | Razorpay (test mode) |
+| **Email** | Nodemailer (Gmail SMTP) |
+| **Images** | Cloudinary |
+| **Logging** | Winston |
+
+---
+
+## 📁 Project Structure
+
+```
+├── backend/
+│   ├── src/
+│   │   ├── config/          # DB, Cloudinary config
+│   │   ├── controllers/     # Auth, Product, Order, Cart, Admin, User
+│   │   ├── middlewares/      # Auth, Admin, Error handling, Validation
+│   │   ├── models/           # User, Product, Order, Cart, OTP, AdminLog
+│   │   ├── routes/           # API route definitions
+│   │   ├── services/         # Email, Payment services
+│   │   ├── utils/            # Logger, JWT, Validators, Helpers
+│   │   ├── app.js            # Express app setup
+│   │   └── server.js         # Server entry point
+│   └── ml-models/
+│       ├── predict.py        # ML prediction script (XGBoost v2)
+│       └── xgboost_churn_pipeline_v2.pkl
+├── frontend/
+│   └── src/
+│       ├── components/       # Reusable UI components
+│       ├── pages/            # Route pages (Home, Shop, Cart, Admin/*)
+│       ├── services/         # API service layer (Axios)
+│       ├── store/            # Zustand state (Auth, Cart)
+│       ├── hooks/            # Custom React hooks
+│       └── router.jsx        # Route configuration
+└── ml-service/               # ML model training notebooks & data
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 Getting Started
 
-<div align="center">
+### Prerequisites
+- Node.js ≥ 16
+- Python 3.8+ (for ML predictions)
+- MongoDB Atlas account (or local MongoDB)
+- Cloudinary account
+- Razorpay test account
 
-### Frontend
-![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+### 1. Clone the Repository
+```bash
+git clone https://github.com/aniket821108/ecommerce-churn-prediction.git
+cd ecommerce-churn-prediction
+```
 
-### Backend
-![NodeJS](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
-![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge&logo=express&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
-![JWT](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens)
+### 2. Backend Setup
+```bash
+cd backend
+npm install
 
-### AI / ML
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)
-![Pandas](https://img.shields.io/badge/pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
+# Create .env from template
+cp src/.env.example src/.env
+# Edit src/.env with your credentials
 
-### Tools & Others
-![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
-![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)
-![C++](https://img.shields.io/badge/C%2B%2B-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)
-![VS Code](https://img.shields.io/badge/VS_Code-0078D4?style=for-the-badge&logo=visual%20studio%20code&logoColor=white)
+# Seed admin user
+node seed-admin.js
 
-</div>
+# Start development server
+npm run dev
+```
 
----
+### 3. Frontend Setup
+```bash
+cd frontend
+npm install
 
-## 🏆 Featured Project
+# Create .env from template
+cp .env.example .env
+# Edit .env with your backend URL
 
-<div align="center">
+# Start development server
+npm run dev
+```
 
-### 🛒 E-Shop — Full Stack E-Commerce Platform
+### 4. Python ML Setup
+```bash
+# Install Python dependencies (in a virtual env)
+pip install joblib pandas scikit-learn xgboost
+```
 
-[![Readme Card](https://github-readme-stats.vercel.app/api/pin/?username=aniket821108&repo=ecommerce-churn-prediction&theme=tokyonight&border_color=7c3aed)](https://github.com/aniket821108/ecommerce-churn-prediction)
-
-</div>
-
-**What I built:**
-- 🎨 **Frontend** — React 18 + Tailwind CSS + Zustand state management
-- ⚙️ **Backend** — Node.js + Express REST API + JWT Authentication
-- 🗄️ **Database** — MongoDB with Mongoose ODM
-- 💳 **Payments** — Razorpay integration (UPI/Cards/Netbanking)
-- 🤖 **AI Feature** — Customer Churn Prediction using Logistic Regression
-- 🌑 **Admin Panel** — Dark-themed dashboard (Vercel/Linear aesthetic)
-- ☁️ **Cloud** — Cloudinary for image storage
-
----
-
-## 📊 GitHub Stats
-
-<div align="center">
-  <img src="https://github-readme-stats.vercel.app/api?username=aniket821108&show_icons=true&theme=tokyonight&border_color=7c3aed&hide_border=false&count_private=true&include_all_commits=true" height="180" alt="GitHub Stats" />
-  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=aniket821108&layout=compact&theme=tokyonight&border_color=7c3aed&hide_border=false&langs_count=8" height="180" alt="Top Languages" />
-</div>
+The server automatically warms up the ML model on startup.
 
 ---
 
-## 🌱 Currently Learning
+## 🔑 Environment Variables
 
-- 🔐 System Design & Scalable Architecture
-- 🐳 Docker & Deployment (CI/CD)
-- 📊 Advanced ML — Recommendation Systems
+See [`backend/src/.env.example`](backend/src/.env.example) and [`frontend/.env.example`](frontend/.env.example) for all required configuration.
 
----
-
-## 📫 Connect With Me
-
-<div align="center">
-
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/aniket-kumar-1225a7284/)
-[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/aniket821108)
-[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:aniketkumar821108@gmail.com)
-
-</div>
+Key variables:
+| Variable | Description |
+|----------|-------------|
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `JWT_ACCESS_SECRET` | Secret for JWT token signing |
+| `CLOUDINARY_*` | Cloudinary upload credentials |
+| `RAZORPAY_KEY_ID/SECRET` | Razorpay payment gateway keys |
+| `EMAIL_USER/PASSWORD` | Gmail SMTP credentials (app password) |
+| `PYTHON_CMD` | Path to Python executable (default: `python3`) |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins for production |
+| `VITE_API_URL` | Backend API URL for frontend |
 
 ---
 
-<div align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=7c3aed&height=100&section=footer&text=Thanks+for+visiting!&fontSize=16&fontColor=ffffff&animation=fadeIn" />
-</div>
+## 🧠 ML Churn Prediction
+
+The churn prediction model uses an **XGBoost classifier** trained on e-commerce customer behavior data.
+
+**Features used:**
+- Account age, monthly/total spend, spend ratio
+- Engagement score (based on 8 service usage indicators)
+- Membership type, preferred device, payment method
+- Customer support usage, mobile app adoption
+
+**Pipeline:** Raw data → Feature engineering → XGBoost v2 Pipeline → Churn probability + risk level
+
+The prediction runs via Python `child_process.spawn` from Node.js, with a built-in heuristic fallback if the ML model is unavailable.
+
+---
+
+## 📸 Screenshots
+
+> *Coming soon*
+
+---
+
+## 📜 API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/send-otp` | Send OTP for registration |
+| `POST` | `/api/auth/verify-otp` | Verify OTP & create account |
+| `POST` | `/api/auth/login` | User login |
+| `GET` | `/api/auth/me` | Get current user |
+| `GET` | `/api/products` | List products |
+| `GET` | `/api/products/:id` | Product details |
+| `GET/POST` | `/api/cart` | Cart operations |
+| `POST` | `/api/orders` | Create order |
+| `GET` | `/api/orders` | User order history |
+| `GET` | `/api/admin/dashboard` | Admin dashboard stats |
+| `GET` | `/api/admin/churn-predictions` | ML churn analysis |
+| `GET` | `/health` | Health check |
+
+---
+
+## 👤 Author
+
+**Aniket Kumar**
+- GitHub: [@aniket821108](https://github.com/aniket821108)
+- Email: aniketkumar821108@gmail.com
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.

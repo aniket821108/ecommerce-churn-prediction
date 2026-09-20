@@ -15,10 +15,9 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Please authenticate to access this resource' });
     }
 
-    // ✅ JWT_SECRET — matches authController.js signToken()
-    const secret = process.env.JWT_SECRET;
+    const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
     if (!secret) {
-      logger.error('JWT_SECRET not defined!');
+      logger.error('JWT access secret not defined!');
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
@@ -58,9 +57,10 @@ const optionalAuth = async (req, res, next) => {
     if (req.headers.authorization?.startsWith('Bearer')) token = req.headers.authorization.split(' ')[1];
     else if (req.cookies?.accessToken) token = req.cookies.accessToken;
 
-    if (token && process.env.JWT_SECRET) {
+    const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
+    if (token && secret) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, secret);
         const user = await User.findById(decoded.id).select('+isActive +role');
         if (user && user.isActive) {
           req.user = user; req.userId = user._id; req.userRole = user.role;
