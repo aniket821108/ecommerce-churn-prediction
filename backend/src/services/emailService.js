@@ -124,21 +124,51 @@ const emailTemplates = {
     `
   }),
 
-  passwordReset: (user, resetToken) => ({
-    subject: 'Password Reset Request',
+  passwordReset: ({ name, resetToken }) => ({
+    subject: 'Reset Your E-Shop Password',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1>Password Reset Request</h1>
-        <p>You requested to reset your password.</p>
-        <a href="${process.env.FRONTEND_URL}/reset-password/${resetToken}"
-           style="display: inline-block; padding: 10px 20px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 5px;">
-          Reset Password
-        </a>
-        <p>This link will expire in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-        <br>
-        <p>Best regards,</p>
-        <p>The E-Shop Team</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 20px;">
+        <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #4F46E5; font-size: 28px; margin: 0;">E-Shop</h1>
+            <p style="color: #6B7280; margin-top: 4px; font-size: 14px;">Password Reset</p>
+          </div>
+          <p style="color: #111827; font-size: 16px; margin-bottom: 8px;">Hi <strong>${name}</strong>,</p>
+          <p style="color: #374151; font-size: 15px; line-height: 1.6;">We received a request to reset your password. Click the button below to set a new one.</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}"
+               style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+              Reset Password
+            </a>
+          </div>
+          <div style="background: #FFF7ED; border-left: 4px solid #F59E0B; border-radius: 4px; padding: 12px 16px; margin: 24px 0;">
+            <p style="margin: 0; color: #92400E; font-size: 14px;">⏱️ This link expires in <strong>30 minutes</strong>. It can only be used once.</p>
+          </div>
+          <p style="color: #6B7280; font-size: 14px;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 32px 0;" />
+          <p style="text-align: center; color: #9CA3AF; font-size: 13px; margin: 0;">E-Shop · Secure Online Shopping</p>
+        </div>
+      </div>
+    `
+  }),
+
+  passwordChanged: ({ name }) => ({
+    subject: 'Your E-Shop Password Has Been Changed',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 20px;">
+        <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #4F46E5; font-size: 28px; margin: 0;">E-Shop</h1>
+            <p style="color: #6B7280; margin-top: 4px; font-size: 14px;">Security Alert</p>
+          </div>
+          <p style="color: #111827; font-size: 16px; margin-bottom: 8px;">Hi <strong>${name}</strong>,</p>
+          <p style="color: #374151; font-size: 15px; line-height: 1.6;">Your password was successfully changed. If you made this change, no further action is needed.</p>
+          <div style="background: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 4px; padding: 12px 16px; margin: 24px 0;">
+            <p style="margin: 0; color: #991B1B; font-size: 14px;">⚠️ If you did <strong>not</strong> make this change, please contact support immediately.</p>
+          </div>
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 32px 0;" />
+          <p style="text-align: center; color: #9CA3AF; font-size: 13px; margin: 0;">E-Shop · Secure Online Shopping</p>
+        </div>
       </div>
     `
   })

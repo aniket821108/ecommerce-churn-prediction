@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters'],
+    minlength: [8, 'Password must be at least 8 characters'],
     select: false
   },
   
@@ -65,6 +65,20 @@ avatar: {
   },
   
   passwordChangedAt: Date,
+
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    select: false,
+  },
+
+  passwordResetToken: String,
+  passwordResetExpires: Date,
+
+  emailVerified: {
+    type: Boolean,
+    default: true,
+  },
   
   createdAt: {
     type: Date,
@@ -94,7 +108,7 @@ userSchema.virtual('fullAddress').get(function() {
 
 // Pre-save middleware
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || this._skipPasswordHash) return next();
   
   try {
     const salt = await bcrypt.genSalt(12);

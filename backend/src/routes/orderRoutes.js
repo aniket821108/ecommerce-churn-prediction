@@ -16,38 +16,18 @@ const {
 
 const paymentService = require('../services/paymentService');
 const Order = require('../models/Order');
-const { catchAsync } = require('../middlewares/errorHandler');
+const { catchAsync, AppError } = require('../middlewares/errorHandler');
 
 /* =========================================
    SPECIFIC ROUTES (Must come FIRST)
 ========================================= */
 
-router.post('/', authenticate, validationSchemas.createOrder, validate, createOrder);
-router.post('/from-cart', authenticate, createOrderFromCart);
+// Customer Shopping Operations (Role: 'user' only)
+router.post('/', authenticate, authorize('user'), validationSchemas.createOrder, validate, createOrder);
+router.post('/from-cart', authenticate, authorize('user'), createOrderFromCart);
 
 // User's Own Orders
-router.get('/my-orders', authenticate, getMyOrders);
-
-// ✅ User can confirm their own Razorpay payment (no admin required)
-router.post('/:id/confirm-payment', authenticate, catchAsync(async (req, res, next) => {
-  const { razorpay_payment_id } = req.body;
-
-  // Find order belonging to this user
-  const order = await Order.findOne({ _id: req.params.id, user: req.userId });
-  if (!order) return next(new Error('Order not found'));
-
-  // Mark payment as completed
-  order.payment.status = 'completed';
-  order.payment.transactionId = razorpay_payment_id;
-  order.payment.paidAt = new Date();
-  await order.save();
-
-  res.status(200).json({
-    success: true,
-    message: 'Payment confirmed successfully',
-    order
-  });
-}));
+router.get('/my-orders', authenticate, authorize('user'), getMyOrders);
 
 // Admin Analytics
 router.get('/analytics/sales', authenticate, authorize('admin'), getSalesAnalytics);
@@ -56,13 +36,17 @@ router.get('/analytics/sales', authenticate, authorize('admin'), getSalesAnalyti
 router.get('/', authenticate, authorize('admin'), getAllOrders);
 
 /* =========================================
-   RAZORPAY ROUTES
+   RAZORPAY CRYPTOGRAPHIC PAYMENT ROUTES
 ========================================= */
 
-// Create Razorpay order (called after DB order is created)
-router.post('/:id/razorpay/create', authenticate, catchAsync(async (req, res, next) => {
+// Create server-side Razorpay order
+router.post('/:id/razorpay/create', authenticate, authorize('user'), catchAsync(async (req, res, next) => {
   const order = await Order.findOne({ _id: req.params.id, user: req.userId });
-  if (!order) return next(new Error('Order not found'));
+  if (!order) return next(new AppError('Order not found', 404));
+
+  if (order.payment.status === 'completed') {
+    return next(new AppError('Order is already paid', 400));
+  }
 
   const razorpayData = await paymentService.createRazorpayOrder(order);
 
@@ -76,9 +60,13 @@ router.post('/:id/razorpay/create', authenticate, catchAsync(async (req, res, ne
   });
 }));
 
-// Verify Razorpay payment after user pays
-router.post('/:id/razorpay/verify', authenticate, catchAsync(async (req, res, next) => {
+// Verify Razorpay payment via cryptographic HMAC-SHA256 signature
+router.post('/:id/razorpay/verify', authenticate, authorize('user'), catchAsync(async (req, res, next) => {
   const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+
+  if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+    return next(new AppError('Missing required payment verification details (payment_id, order_id, signature)', 400));
+  }
 
   const result = await paymentService.verifyRazorpayPayment(
     razorpay_payment_id,
@@ -87,18 +75,23 @@ router.post('/:id/razorpay/verify', authenticate, catchAsync(async (req, res, ne
   );
 
   if (!result.success) {
-    return next(new Error('Payment verification failed'));
+    return next(new AppError('Cryptographic payment verification failed. Invalid signature.', 400));
   }
 
-  const order = await Order.findById(req.params.id);
-  if (!order) return next(new Error('Order not found'));
+  const order = await Order.findOne({ _id: req.params.id, user: req.userId });
+  if (!order) return next(new AppError('Order not found', 404));
 
   order.payment.status = 'completed';
   order.payment.transactionId = razorpay_payment_id;
   order.payment.paidAt = new Date();
+  order.status = 'processing';
   await order.save();
 
-  res.status(200).json({ success: true, message: 'Payment verified', order });
+  res.status(200).json({
+    success: true,
+    message: 'Payment verified and confirmed successfully',
+    order
+  });
 }));
 
 /* =========================================
@@ -106,7 +99,7 @@ router.post('/:id/razorpay/verify', authenticate, catchAsync(async (req, res, ne
 ========================================= */
 
 router.get('/:id', authenticate, getOrder);
-router.put('/:id/cancel', authenticate, cancelOrder);
+router.put('/:id/cancel', authenticate, authorize('user'), cancelOrder);
 router.put('/:id/status', authenticate, authorize('admin'), updateOrderStatus);
 router.put('/:id/payment', authenticate, authorize('admin'), updatePaymentStatus);
 

@@ -99,7 +99,8 @@ temp/
 ############################
 coverage/
 #########################
-backend/uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
 #########################
 # Sensitive information files (keys, credentials)
 IMPORTANT_INFORMATION/

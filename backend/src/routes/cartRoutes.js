@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, authorize } = require('../middlewares/auth');
 const { 
   getCart, 
   addToCart, 
@@ -9,7 +9,8 @@ const {
   updateCartItemQuantity // ✅ Import the new function
 } = require('../controllers/cartController');
 
-router.use(authenticate);
+// Only standard customers (role: 'user') can maintain shopping carts
+router.use(authenticate, authorize('user'));
 
 router.route('/')
   .get(getCart)

@@ -5,9 +5,15 @@ import {
   ShoppingCartIcon,
   UsersIcon,
   ChartBarIcon,
+  XMarkIcon,
+  ArrowRightOnRectangleIcon,
+  ShoppingBagIcon as BagOutline,
 } from '@heroicons/react/24/outline';
+import useAuthStore from '../../store/authStore';
 
-const AdminSidebar = () => {
+const AdminSidebar = ({ isOpen, onClose }) => {
+  const { logout } = useAuthStore();
+
   const navItems = [
     { path: '/admin', label: 'Dashboard', icon: HomeIcon, end: true },
     { path: '/admin/products', label: 'Products', icon: ShoppingBagIcon },
@@ -16,89 +22,135 @@ const AdminSidebar = () => {
     { path: '/admin/churn', label: 'Churn Analytics', icon: ChartBarIcon },
   ];
 
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
+
   return (
-    <aside
-      className="w-60 min-h-screen fixed left-0 top-0 pt-16 z-40 flex flex-col"
-      style={{ background: '#0a0a0a', borderRight: '1px solid #1f1f1f' }}
-    >
-      {/* Brand */}
-      <div className="px-5 py-5">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: '#fff' }}
-          >
-            A
+    <>
+      {/* ── Mobile Overlay Backdrop ── */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* ── Sidebar Container ── */}
+      <aside
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+          isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+      >
+        {/* ── Brand Header ── */}
+        <div className="h-16 px-6 flex items-center justify-between border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+            >
+              E
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-slate-900 text-base tracking-tight leading-none">
+                  E-Shop
+                </span>
+                <span className="text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded-md border border-violet-200/60 uppercase tracking-wider">
+                  Admin
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium tracking-tight mt-0.5">
+                Control Hub
+              </span>
+            </div>
           </div>
+
+          {/* Close button for Mobile */}
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Close menu"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* ── Navigation Menu ── */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
           <div>
-            <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#a3a3a3' }}>
-              Admin Panel
+            <p className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Management & Analytics
             </p>
+            <nav className="space-y-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.end}
+                  onClick={handleNavClick}
+                  className={({ isActive }) =>
+                    `group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                      isActive
+                        ? 'bg-violet-50 text-violet-700 font-semibold shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <item.icon
+                          className={`w-5 h-5 flex-shrink-0 transition-colors ${
+                            isActive
+                              ? 'text-violet-600'
+                              : 'text-slate-400 group-hover:text-slate-600'
+                          }`}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+
+                      {isActive && (
+                        <span className="w-1.5 h-4 rounded-full bg-violet-600 shadow-xs" />
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
           </div>
         </div>
-      </div>
 
-      {/* Divider */}
-      <div style={{ height: '1px', background: '#1f1f1f', margin: '0 20px' }} />
+        {/* ── Sidebar Footer ── */}
+        <div className="p-4 border-t border-slate-100 flex-shrink-0 bg-slate-50/50 space-y-2">
+          {/* Quick System Badge */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200/70 shadow-xs text-xs">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span className="font-semibold text-slate-700">Platform v1.0</span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium">Online</span>
+          </div>
 
-      {/* Nav */}
-      <nav className="mt-3 flex-1 px-3 space-y-0.5">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.end}
-            className="group"
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '13.5px',
-              fontWeight: isActive ? '500' : '400',
-              color: isActive ? '#f5f5f5' : '#737373',
-              background: isActive ? '#1a1a1a' : 'transparent',
-              transition: 'all 0.15s ease',
-              textDecoration: 'none',
-            })}
-            onMouseEnter={e => {
-              if (!e.currentTarget.dataset.active) {
-                e.currentTarget.style.color = '#d4d4d4';
-                e.currentTarget.style.background = '#141414';
+          {/* Quick Logout Button */}
+          <button
+            onClick={() => {
+              if (window.confirm('Are you sure you want to log out of Admin?')) {
+                logout();
               }
             }}
-            onMouseLeave={e => {
-              if (!e.currentTarget.dataset.active) {
-                e.currentTarget.style.color = '#737373';
-                e.currentTarget.style.background = 'transparent';
-              }
-            }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors duration-150"
           >
-            {({ isActive }) => (
-              <>
-                <item.icon
-                  className="h-4 w-4 flex-shrink-0"
-                  style={{ color: isActive ? '#8b5cf6' : '#525252' }}
-                />
-                {item.label}
-                {isActive && (
-                  <span
-                    className="ml-auto w-1 h-4 rounded-full"
-                    style={{ background: '#7c3aed' }}
-                  />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Footer */}
-      <div className="px-5 py-4" style={{ borderTop: '1px solid #1f1f1f' }}>
-        <p className="text-xs" style={{ color: '#404040' }}>v1.0.0 · Admin</p>
-      </div>
-    </aside>
+            <ArrowRightOnRectangleIcon className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
 

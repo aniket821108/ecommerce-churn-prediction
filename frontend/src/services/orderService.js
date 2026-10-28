@@ -10,7 +10,6 @@ export const orderService = {
   // Razorpay
   createRazorpayOrder: (orderId) => api.post(`/orders/${orderId}/razorpay/create`),
   verifyRazorpayPayment: (orderId, data) => api.post(`/orders/${orderId}/razorpay/verify`, data),
-  confirmPayment: (orderId, data) => api.post(`/orders/${orderId}/confirm-payment`, data),
 
   // Admin
   getAllOrders: (params) => api.get('/orders', { params }),

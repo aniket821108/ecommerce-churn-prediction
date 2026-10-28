@@ -1,4 +1,5 @@
 const Product = require('../models/Product');
+const AdminLog = require('../models/AdminLog');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
 const logger = require('../utils/logger');
@@ -130,6 +131,15 @@ exports.createProduct = catchAsync(async (req, res, next) => {
   });
   
   logger.info(`Product created: ${product.name}`, { productId: product._id, adminId: req.userId });
+  await AdminLog.logAction(
+    req.userId,
+    'create',
+    'product',
+    product._id,
+    { name: product.name, price: product.price, stock: product.stock },
+    req.ip,
+    req.headers['user-agent']
+  );
   
   res.status(201).json({ success: true, message: 'Product created successfully', product });
 });
@@ -170,6 +180,15 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
   await product.save();
   
   logger.info(`Product updated: ${product.name}`, { productId: product._id, adminId: req.userId });
+  await AdminLog.logAction(
+    req.userId,
+    'update',
+    'product',
+    product._id,
+    { name: product.name, price: product.price, stock: product.stock },
+    req.ip,
+    req.headers['user-agent']
+  );
   
   res.status(200).json({ success: true, message: 'Product updated successfully', product });
 });
@@ -189,6 +208,15 @@ exports.deleteProduct = catchAsync(async (req, res, next) => {
   await product.save();
   
   logger.info(`Product deleted: ${product.name}`, { productId: product._id, adminId: req.userId });
+  await AdminLog.logAction(
+    req.userId,
+    'delete',
+    'product',
+    product._id,
+    { name: product.name },
+    req.ip,
+    req.headers['user-agent']
+  );
   
   res.status(200).json({ success: true, message: 'Product deleted successfully' });
 });

@@ -1,14 +1,28 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import useCartStore from '../../store/cartStore';
+import useAuthStore from '../../store/authStore';
+import toast from 'react-hot-toast';
 
 const ProductCard = ({ product, index = 0 }) => {
+  const navigate = useNavigate();
   const addItem = useCartStore((state) => state.addItem);
+  const { user, isAuthenticated } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      toast.error('Please sign in to add items to your cart');
+      navigate('/login');
+      return;
+    }
+    if (isAdmin) {
+      toast.error('Admins cannot purchase products. Please use a customer account.');
+      return;
+    }
     if (adding) return;
     setAdding(true);
     await addItem(product._id, 1);
@@ -72,21 +86,27 @@ const ProductCard = ({ product, index = 0 }) => {
           )}
         </div>
 
-        {/* Quick-add button slides up on hover */}
+        {/* Quick action button slides up on hover */}
         <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out px-3 pb-3">
-          <button
-            onClick={handleAddToCart}
-            disabled={adding || isOutOfStock}
-            className={`w-full py-2 rounded-xl text-sm font-semibold backdrop-blur-sm transition-all duration-200 shadow-lg
-              ${isOutOfStock
-                ? 'bg-gray-400/80 text-white cursor-not-allowed'
-                : added
-                ? 'bg-emerald-500/90 text-white'
-                : 'bg-white/90 text-gray-900 hover:bg-white'
-              }`}
-          >
-            {isOutOfStock ? 'Out of Stock' : adding ? 'Adding…' : added ? '✓ Added to Cart' : 'Quick Add'}
-          </button>
+          {isAdmin ? (
+            <span className="block w-full py-2 text-center rounded-xl text-xs font-bold bg-violet-600/90 text-white backdrop-blur-sm shadow-lg">
+              Admin View
+            </span>
+          ) : (
+            <button
+              onClick={handleAddToCart}
+              disabled={adding || isOutOfStock}
+              className={`w-full py-2 rounded-xl text-sm font-semibold backdrop-blur-sm transition-all duration-200 shadow-lg
+                ${isOutOfStock
+                  ? 'bg-gray-400/80 text-white cursor-not-allowed'
+                  : added
+                  ? 'bg-emerald-500/90 text-white'
+                  : 'bg-white/90 text-gray-900 hover:bg-white'
+                }`}
+            >
+              {isOutOfStock ? 'Out of Stock' : adding ? 'Adding…' : added ? '✓ Added to Cart' : 'Quick Add'}
+            </button>
+          )}
         </div>
       </Link>
 

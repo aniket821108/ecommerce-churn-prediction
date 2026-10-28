@@ -1,16 +1,46 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import useCartStore from '../store/cartStore';
+import useAuthStore from '../store/authStore';
 import CartItem from '../components/cart/CartItem';
 import CartSummary from '../components/cart/CartSummary';
 import Loader from '../components/common/Loader';
 
 const Cart = () => {
   const { items, subtotal, loading, fetchCart } = useCartStore();
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'admin';
 
-  useEffect(() => { fetchCart(); }, []);
+  useEffect(() => { 
+    if (!isAdmin) fetchCart(); 
+  }, [isAdmin, fetchCart]);
 
   if (loading) return <Loader />;
+
+  // ── Admin State ──
+  if (isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto py-24 flex flex-col items-center text-center px-4">
+        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6" style={{ background: '#f5f3ff' }}>
+          <svg className="w-10 h-10" style={{ color: '#7c3aed' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-black text-gray-900 mb-2" style={{ letterSpacing: '-0.02em' }}>
+          Cart Disabled for Admin
+        </h2>
+        <p className="text-gray-500 text-sm mb-8 max-w-sm">
+          Administrative accounts cannot maintain a customer shopping cart or checkout orders. To place customer orders, please log in with a standard customer account.
+        </p>
+        <Link to="/admin"
+          className="px-8 py-3 rounded-xl font-bold text-sm text-white transition-all hover:scale-105"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}>
+          Go to Admin Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   const discount = 0;
   const shipping = subtotal > 1000 ? 0 : 50;

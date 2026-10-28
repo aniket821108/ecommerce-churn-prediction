@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Order = require('../models/Order');
+const AdminLog = require('../models/AdminLog');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
 // ✅ IMPORT CLOUDINARY UPLOAD FUNCTION
@@ -223,7 +224,7 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   const { name, email, role, isActive, address, phone } = req.body;
   
   // Prevent self-demotion
-  if (role && role !== 'admin' && user._id.toString() === req.userId) {
+  if (role && role !== 'admin' && user._id.toString() === (req.userId?.toString() || req.userId)) {
     return next(new AppError('You cannot remove your own admin privileges', 400));
   }
   
@@ -243,6 +244,16 @@ exports.updateUser = catchAsync(async (req, res, next) => {
     updates: req.body 
   });
   
+  await AdminLog.logAction(
+    req.userId,
+    'update',
+    'user',
+    user._id,
+    { email: user.email, updates: req.body },
+    req.ip,
+    req.headers['user-agent']
+  );
+  
   res.status(200).json({
     success: true,
     message: 'User updated successfully',
@@ -261,7 +272,7 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
   }
   
   // Prevent self-deletion
-  if (user._id.toString() === req.userId) {
+  if (user._id.toString() === (req.userId?.toString() || req.userId)) {
     return next(new AppError('You cannot delete your own account', 400));
   }
   
@@ -273,6 +284,16 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
     userId: user._id,
     adminId: req.userId 
   });
+  
+  await AdminLog.logAction(
+    req.userId,
+    'delete',
+    'user',
+    user._id,
+    { email: user.email, action: 'soft_delete' },
+    req.ip,
+    req.headers['user-agent']
+  );
   
   res.status(200).json({
     success: true,

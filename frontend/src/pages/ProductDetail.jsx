@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { productService } from '../services/productService';
 import useCartStore from '../store/cartStore';
+import useAuthStore from '../store/authStore';
 import Loader from '../components/common/Loader';
 import ProductGrid from '../components/product/ProductGrid';
 import toast from 'react-hot-toast';
@@ -40,6 +41,8 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const addItem = useCartStore((state) => state.addItem);
+  const { user, isAuthenticated } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -85,6 +88,15 @@ const ProductDetail = () => {
 
   // ── Handlers ──
   const handleAddToCart = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to add items to your cart');
+      navigate('/login');
+      return;
+    }
+    if (isAdmin) {
+      toast.error('Admins cannot purchase products. Please use a customer account.');
+      return;
+    }
     if (adding || isOutOfStock) return;
     setAdding(true);
     await addItem(product._id, quantity);
@@ -94,6 +106,15 @@ const ProductDetail = () => {
   };
 
   const handleBuyNow = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to proceed with purchase');
+      navigate('/login');
+      return;
+    }
+    if (isAdmin) {
+      toast.error('Admins cannot purchase products. Please use a customer account.');
+      return;
+    }
     if (buyingNow || isOutOfStock) return;
     setBuyingNow(true);
     try {
@@ -288,127 +309,156 @@ const ProductDetail = () => {
             {product.description}
           </p>
 
-          {/* Quantity + Add to Cart */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-4">
-              {/* Quantity */}
-              <div className="flex items-center rounded-xl overflow-hidden"
-                style={{ border: '1.5px solid #e5e7eb' }}>
+          {/* Admin vs Customer Action Block */}
+          {isAdmin ? (
+            <div className="p-5 rounded-2xl border border-violet-200 bg-violet-50/70 space-y-3">
+              <div className="flex items-center gap-2 text-violet-900 font-bold text-sm">
+                <span className="w-2 h-2 rounded-full bg-violet-600 animate-pulse" />
+                <span>Admin View Mode</span>
+              </div>
+              <p className="text-xs text-violet-700 leading-relaxed">
+                Customer purchasing is disabled on administrative accounts to ensure segregation of duties and data integrity.
+              </p>
+              <div className="pt-1 flex gap-2">
+                <Link
+                  to="/admin/products"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 transition-colors shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Manage in Admin Panel
+                </Link>
                 <button
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  className="w-10 h-11 flex items-center justify-center text-lg font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                  disabled={quantity <= 1}
-                >−</button>
-                <span className="w-12 text-center text-sm font-bold text-gray-900"
-                  style={{ borderLeft: '1.5px solid #e5e7eb', borderRight: '1.5px solid #e5e7eb', lineHeight: '44px' }}>
-                  {quantity}
+                  onClick={handleShare}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 transition-colors"
+                >
+                  Share Product
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                {/* Quantity */}
+                <div className="flex items-center rounded-xl overflow-hidden"
+                  style={{ border: '1.5px solid #e5e7eb' }}>
+                  <button
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    className="w-10 h-11 flex items-center justify-center text-lg font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                    disabled={quantity <= 1}
+                  >−</button>
+                  <span className="w-12 text-center text-sm font-bold text-gray-900"
+                    style={{ borderLeft: '1.5px solid #e5e7eb', borderRight: '1.5px solid #e5e7eb', lineHeight: '44px' }}>
+                    {quantity}
+                  </span>
+                  <button
+                    onClick={() => setQuantity(q => Math.min(product.stock || 99, q + 1))}
+                    className="w-10 h-11 flex items-center justify-center text-lg font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                    disabled={quantity >= (product.stock || 99)}
+                  >+</button>
+                </div>
+
+                <span className="text-xs text-gray-400">
+                  {product.stock > 0 ? `${product.stock} available` : ''}
                 </span>
-                <button
-                  onClick={() => setQuantity(q => Math.min(product.stock || 99, q + 1))}
-                  className="w-10 h-11 flex items-center justify-center text-lg font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                  disabled={quantity >= (product.stock || 99)}
-                >+</button>
               </div>
 
-              <span className="text-xs text-gray-400">
-                {product.stock > 0 ? `${product.stock} available` : ''}
-              </span>
-            </div>
+              {/* Add to Cart + Wishlist + Share */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={adding || isOutOfStock}
+                  className="flex-1 py-3.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{
+                    background: isOutOfStock ? '#9ca3af' : added ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                    boxShadow: isOutOfStock ? 'none' : '0 4px 16px rgba(79,70,229,0.3)',
+                  }}
+                >
+                  {adding ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Adding…
+                    </>
+                  ) : added ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Added to Cart!
+                    </>
+                  ) : isOutOfStock ? 'Out of Stock' : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Add to Cart
+                    </>
+                  )}
+                </button>
 
-            {/* Add to Cart + Wishlist + Share */}
-            <div className="flex gap-3">
+                {/* Wishlist */}
+                <button
+                  onClick={() => { setWishlisted(w => !w); toast.success(wishlisted ? 'Removed from wishlist' : 'Added to wishlist!'); }}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 flex-shrink-0"
+                  style={{
+                    border: `1.5px solid ${wishlisted ? '#ef4444' : '#e5e7eb'}`,
+                    background: wishlisted ? '#fef2f2' : '#fff',
+                    color: wishlisted ? '#ef4444' : '#9ca3af',
+                  }}
+                >
+                  <svg className="w-5 h-5" fill={wishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </button>
+
+                {/* Share */}
+                <button
+                  onClick={handleShare}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 flex-shrink-0"
+                  style={{ border: '1.5px solid #e5e7eb', background: '#fff', color: '#9ca3af' }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* ── Buy Now button ── */}
               <button
-                onClick={handleAddToCart}
-                disabled={adding || isOutOfStock}
-                className="flex-1 py-3.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                onClick={handleBuyNow}
+                disabled={buyingNow || isOutOfStock}
+                className="w-full py-3.5 rounded-xl font-black text-sm transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 style={{
-                  background: isOutOfStock ? '#9ca3af' : added ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                  boxShadow: isOutOfStock ? 'none' : '0 4px 16px rgba(79,70,229,0.3)',
+                  background: isOutOfStock ? '#f3f4f6' : '#fff',
+                  color: isOutOfStock ? '#9ca3af' : '#4f46e5',
+                  border: `2px solid ${isOutOfStock ? '#e5e7eb' : '#4f46e5'}`,
                 }}
               >
-                {adding ? (
+                {buyingNow ? (
                   <>
                     <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Adding…
+                    Redirecting…
                   </>
-                ) : added ? (
+                ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Added to Cart!
-                  </>
-                ) : isOutOfStock ? 'Out of Stock' : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Add to Cart
+                    Buy Now
                   </>
                 )}
               </button>
-
-              {/* Wishlist */}
-              <button
-                onClick={() => { setWishlisted(w => !w); toast.success(wishlisted ? 'Removed from wishlist' : 'Added to wishlist!'); }}
-                className="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 flex-shrink-0"
-                style={{
-                  border: `1.5px solid ${wishlisted ? '#ef4444' : '#e5e7eb'}`,
-                  background: wishlisted ? '#fef2f2' : '#fff',
-                  color: wishlisted ? '#ef4444' : '#9ca3af',
-                }}
-              >
-                <svg className="w-5 h-5" fill={wishlisted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </button>
-
-              {/* Share */}
-              <button
-                onClick={handleShare}
-                className="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 flex-shrink-0"
-                style={{ border: '1.5px solid #e5e7eb', background: '#fff', color: '#9ca3af' }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              </button>
             </div>
-
-            {/* ── Buy Now button ── */}
-            <button
-              onClick={handleBuyNow}
-              disabled={buyingNow || isOutOfStock}
-              className="w-full py-3.5 rounded-xl font-black text-sm transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              style={{
-                background: isOutOfStock ? '#f3f4f6' : '#fff',
-                color: isOutOfStock ? '#9ca3af' : '#4f46e5',
-                border: `2px solid ${isOutOfStock ? '#e5e7eb' : '#4f46e5'}`,
-              }}
-            >
-              {buyingNow ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Redirecting…
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Buy Now
-                </>
-              )}
-            </button>
-          </div>
+          )}
 
           {/* Trust chips */}
           <div className="flex flex-wrap gap-2 pt-1">

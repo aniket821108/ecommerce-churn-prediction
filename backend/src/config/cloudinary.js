@@ -8,6 +8,8 @@ cloudinary.config({
   secure: true
 });
 
+const { cleanupFile } = require('../utils/fileUtils');
+
 // Helper function to upload image
 const uploadToCloudinary = async (file, folder = 'ecommerce') => {
   try {
@@ -29,6 +31,11 @@ const uploadToCloudinary = async (file, folder = 'ecommerce') => {
   } catch (error) {
     logger.error('Cloudinary upload error:', error);
     throw new Error('Image upload failed');
+  } finally {
+    // Guarantee deletion of local temp file after upload attempt
+    if (typeof file === 'string' && (file.includes('uploads') || file.includes('tmp'))) {
+      await cleanupFile(file);
+    }
   }
 };
 

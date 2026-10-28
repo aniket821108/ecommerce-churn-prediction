@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Cart = require('../models/Cart');
 const User = require('../models/User');
+const AdminLog = require('../models/AdminLog');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
 
@@ -17,99 +18,106 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     notes
   } = req.body;
   
-  // Validate items
   if (!items || items.length === 0) {
     return next(new AppError('Order must contain at least one item', 400));
   }
   
-  // Calculate totals and validate stock
   let subtotal = 0;
   const orderItems = [];
-  
-  for (const item of items) {
-    const product = await Product.findById(item.product);
-    
-    if (!product) {
-      return next(new AppError(`Product not found: ${item.product}`, 404));
+  const decrementedProducts = [];
+
+  try {
+    for (const item of items) {
+      const quantity = Number(item.quantity);
+      if (!quantity || quantity <= 0) {
+        throw new AppError('Item quantity must be a positive number', 400);
+      }
+
+      // Atomic conditional decrement: prevents race condition overselling
+      const product = await Product.findOneAndUpdate(
+        { _id: item.product, stock: { $gte: quantity }, isActive: true },
+        { $inc: { stock: -quantity } },
+        { new: true }
+      );
+
+      if (!product) {
+        const existing = await Product.findById(item.product);
+        if (!existing) throw new AppError(`Product not found: ${item.product}`, 404);
+        if (!existing.isActive) throw new AppError(`Product is no longer available: ${existing.name}`, 400);
+        throw new AppError(`Insufficient stock for: ${existing.name}. Available: ${existing.stock}`, 400);
+      }
+
+      decrementedProducts.push({ productId: product._id, quantity });
+
+      const itemTotal = product.price * quantity;
+      subtotal += itemTotal;
+
+      orderItems.push({
+        product: product._id,
+        name: product.name,
+        price: product.price,
+        quantity,
+        image: product.images?.length > 0 ? product.images[0].url : null,
+        sku: product.sku
+      });
     }
-    
-    if (!product.isActive) {
-      return next(new AppError(`Product is not available: ${product.name}`, 400));
-    }
-    
-    if (product.stock < item.quantity) {
-      return next(new AppError(`Insufficient stock for: ${product.name}`, 400));
-    }
-    
-    const itemTotal = product.price * item.quantity;
-    subtotal += itemTotal;
-    
-    orderItems.push({
-      product: product._id,
-      name: product.name,
-      price: product.price,
-      quantity: item.quantity,
-      image: product.images.length > 0 ? product.images[0].url : null,
-      sku: product.sku
+
+    const tax = subtotal * 0.18; // 18% GST (India)
+    const shippingCost = subtotal > 1000 ? 0 : 50; // Free shipping above ₹1000
+    const discount = 0;
+    const total = subtotal + tax + shippingCost - discount;
+
+    const order = await Order.create({
+      user: req.userId,
+      items: orderItems,
+      shippingAddress,
+      billingAddress: billingAddress || shippingAddress,
+      payment: {
+        method: paymentMethod,
+        amount: total,
+        status: 'pending'
+      },
+      subtotal,
+      tax,
+      shippingCost,
+      discount,
+      total,
+      notes,
+      estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
-    
-    // Update product stock
-    product.stock -= item.quantity;
-    await product.save();
+
+    // Clear user's cart
+    await Cart.findOneAndUpdate(
+      { user: req.userId },
+      { items: [] }
+    );
+
+    logger.info(`Order created: ${order.orderNumber}`, { 
+      orderId: order._id,
+      userId: req.userId,
+      total: order.total 
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order placed successfully',
+      order
+    });
+  } catch (error) {
+    // Compensating rollback for all decremented products
+    for (const dec of decrementedProducts) {
+      await Product.findByIdAndUpdate(dec.productId, { $inc: { stock: dec.quantity } });
+    }
+    return next(error);
   }
-  
-  // Calculate totals
-  const tax = subtotal * 0.18; // 18% GST (India)
-  const shippingCost = subtotal > 1000 ? 0 : 50; // Free shipping above ₹1000
-  const discount = 0; // Apply coupon logic here
-  const total = subtotal + tax + shippingCost - discount;
-  
-  // Create order
-  const order = await Order.create({
-    user: req.userId,
-    items: orderItems,
-    shippingAddress,
-    billingAddress: billingAddress || shippingAddress,
-    payment: {
-      method: paymentMethod,
-      amount: total
-    },
-    subtotal,
-    tax,
-    shippingCost,
-    discount,
-    total,
-    notes,
-    estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-  });
-  
-  // Clear user's cart
-  await Cart.findOneAndUpdate(
-    { user: req.userId },
-    { items: [] }
-  );
-  
-  // Log order creation
-  logger.info(`Order created: ${order.orderNumber}`, { 
-    orderId: order._id,
-    userId: req.userId,
-    total: order.total 
-  });
-  
-  res.status(201).json({
-    success: true,
-    message: 'Order placed successfully',
-    order
-  });
 });
 
 // @desc    Create order from cart
 // @route   POST /api/orders/from-cart
 // @access  Private
 exports.createOrderFromCart = catchAsync(async (req, res, next) => {
-  const { shippingAddress, paymentMethod, notes } = req.body;
+  const { shippingAddress, billingAddress, paymentMethod, notes } = req.body;
   
-  // Get user's cart
   const cart = await Cart.findOne({ user: req.userId })
     .populate('items.product', 'name price images stock isActive sku');
   
@@ -117,77 +125,92 @@ exports.createOrderFromCart = catchAsync(async (req, res, next) => {
     return next(new AppError('Cart is empty', 400));
   }
   
-  // Validate cart items and stock
   const orderItems = [];
   let subtotal = 0;
-  
-  for (const cartItem of cart.items) {
-    const product = cartItem.product;
-    
-    if (!product.isActive) {
-      return next(new AppError(`Product is not available: ${product.name}`, 400));
+  const decrementedProducts = [];
+
+  try {
+    for (const cartItem of cart.items) {
+      const productDoc = cartItem.product;
+      const quantity = Number(cartItem.quantity);
+      if (!productDoc || !quantity || quantity <= 0) continue;
+
+      // Atomic conditional decrement: prevents race condition overselling
+      const product = await Product.findOneAndUpdate(
+        { _id: productDoc._id, stock: { $gte: quantity }, isActive: true },
+        { $inc: { stock: -quantity } },
+        { new: true }
+      );
+
+      if (!product) {
+        throw new AppError(`Insufficient stock or item no longer available: ${productDoc.name}`, 400);
+      }
+
+      decrementedProducts.push({ productId: product._id, quantity });
+
+      const itemTotal = product.price * quantity;
+      subtotal += itemTotal;
+
+      orderItems.push({
+        product: product._id,
+        name: product.name,
+        price: product.price,
+        quantity,
+        image: product.images?.length > 0 ? product.images[0].url : null,
+        sku: product.sku
+      });
     }
-    
-    if (product.stock < cartItem.quantity) {
-      return next(new AppError(`Insufficient stock for: ${product.name}`, 400));
+
+    if (orderItems.length === 0) {
+      throw new AppError('No valid items found in cart to checkout', 400);
     }
-    
-    const itemTotal = product.price * cartItem.quantity;
-    subtotal += itemTotal;
-    
-    orderItems.push({
-      product: product._id,
-      name: product.name,
-      price: product.price,
-      quantity: cartItem.quantity,
-      image: product.images.length > 0 ? product.images[0].url : null,
-      sku: product.sku
+
+    const tax = subtotal * 0.18;
+    const shippingCost = subtotal > 1000 ? 0 : 50;
+    const discount = cart.discountAmount || 0;
+    const total = subtotal + tax + shippingCost - discount;
+
+    const order = await Order.create({
+      user: req.userId,
+      items: orderItems,
+      shippingAddress,
+      billingAddress: billingAddress || shippingAddress,
+      payment: {
+        method: paymentMethod,
+        amount: total,
+        status: 'pending'
+      },
+      subtotal,
+      tax,
+      shippingCost,
+      discount,
+      total,
+      notes,
+      estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
-    
-    // Update product stock
-    product.stock -= cartItem.quantity;
-    await product.save();
+
+    cart.items = [];
+    cart.coupon = null;
+    cart.discountAmount = 0;
+    await cart.save();
+
+    logger.info(`Order created from cart: ${order.orderNumber}`, { 
+      orderId: order._id,
+      userId: req.userId 
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order placed successfully',
+      order
+    });
+  } catch (error) {
+    // Compensating rollback for all decremented products
+    for (const dec of decrementedProducts) {
+      await Product.findByIdAndUpdate(dec.productId, { $inc: { stock: dec.quantity } });
+    }
+    return next(error);
   }
-  
-  // Calculate totals
-  const tax = subtotal * 0.18;
-  const shippingCost = subtotal > 1000 ? 0 : 50;
-  const discount = cart.discountAmount || 0;
-  const total = subtotal + tax + shippingCost - discount;
-  
-  // Create order
-  const order = await Order.create({
-    user: req.userId,
-    items: orderItems,
-    shippingAddress,
-    payment: {
-      method: paymentMethod,
-      amount: total
-    },
-    subtotal,
-    tax,
-    shippingCost,
-    discount,
-    total,
-    notes,
-    estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  });
-  
-  // Clear cart
-  cart.items = [];
-  cart.coupon = null;
-  await cart.save();
-  
-  logger.info(`Order created from cart: ${order.orderNumber}`, { 
-    orderId: order._id,
-    userId: req.userId 
-  });
-  
-  res.status(201).json({
-    success: true,
-    message: 'Order placed successfully',
-    order
-  });
 });
 
 // @desc    Get all orders (Admin)
@@ -279,8 +302,11 @@ exports.getOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('Order not found', 404));
   }
   
-  // Check if user is authorized to view this order
-  if (req.user.role !== 'admin' && order.user._id.toString() !== req.userId) {
+  // Check if user is authorized to view this order (owner or admin)
+  const orderOwnerId = (order.user?._id || order.user)?.toString();
+  const currentUserId = (req.userId?._id || req.userId)?.toString();
+
+  if (req.user?.role !== 'admin' && req.userRole !== 'admin' && orderOwnerId !== currentUserId) {
     return next(new AppError('Not authorized to view this order', 403));
   }
   
@@ -346,6 +372,16 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
     oldStatus: order.status,
     newStatus: status 
   });
+  
+  await AdminLog.logAction(
+    req.userId,
+    'update',
+    'order',
+    order._id,
+    { orderNumber: order.orderNumber, status, trackingNumber, courier },
+    req.ip,
+    req.headers['user-agent']
+  );
   
   res.status(200).json({
     success: true,

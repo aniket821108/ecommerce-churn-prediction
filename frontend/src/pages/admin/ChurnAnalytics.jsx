@@ -1,21 +1,55 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminService } from '../../services/adminService';
 import Loader from '../../components/common/Loader';
+import {
+  ArrowPathIcon,
+  SparklesIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  ShieldExclamationIcon,
+  ChartBarIcon,
+} from '@heroicons/react/24/outline';
 
-const riskMap = {
-  high:   { bg: '#200d0d', color: '#f87171', dot: '#dc2626', barColor: '#dc2626' },
-  medium: { bg: '#1f1608', color: '#fbbf24', dot: '#d97706', barColor: '#d97706' },
-  low:    { bg: '#0d2015', color: '#4ade80', dot: '#16a34a', barColor: '#16a34a' },
+const riskTheme = {
+  high: {
+    bg: 'bg-rose-50 text-rose-700 border-rose-200/80',
+    dot: 'bg-rose-500',
+    bar: 'bg-rose-500',
+    cardBorder: 'border-rose-100',
+    statBg: 'bg-rose-50/50',
+    statText: 'text-rose-600',
+    icon: ShieldExclamationIcon,
+  },
+  medium: {
+    bg: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    dot: 'bg-amber-500',
+    bar: 'bg-amber-500',
+    cardBorder: 'border-amber-100',
+    statBg: 'bg-amber-50/50',
+    statText: 'text-amber-600',
+    icon: ExclamationTriangleIcon,
+  },
+  low: {
+    bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    dot: 'bg-emerald-500',
+    bar: 'bg-emerald-500',
+    cardBorder: 'border-emerald-100',
+    statBg: 'bg-emerald-50/50',
+    statText: 'text-emerald-600',
+    icon: CheckCircleIcon,
+  },
 };
 
 const RiskBadge = ({ risk }) => {
   const key = (risk || 'low').toLowerCase();
-  const s = riskMap[key] || { bg: '#1a1a1a', color: '#737373', dot: '#404040' };
+  const theme = riskTheme[key] || riskTheme.low;
+
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium capitalize"
-      style={{ background: s.bg, color: s.color }}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.dot }} />
-      {key}
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${theme.bg}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
+      <span>{key} Risk</span>
     </span>
   );
 };
@@ -23,20 +57,25 @@ const RiskBadge = ({ risk }) => {
 const ProbabilityBar = ({ value, risk }) => {
   const pct = Math.round((value || 0) * 100);
   const key = (risk || 'low').toLowerCase();
-  const color = riskMap[key]?.barColor || '#525252';
+  const barClass = riskTheme[key]?.bar || 'bg-slate-400';
+
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex-1 rounded-full overflow-hidden" style={{ height: '4px', background: '#1f1f1f' }}>
-        <div className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${pct}%`, background: color }} />
+    <div className="flex items-center gap-3">
+      <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ${barClass}`}
+          style={{ width: `${Math.min(100, Math.max(4, pct))}%` }}
+        />
       </div>
-      <span className="text-xs font-mono w-10 text-right" style={{ color: '#737373' }}>{pct}%</span>
+      <span className="text-xs font-mono font-bold text-slate-700 w-10 text-right">
+        {pct}%
+      </span>
     </div>
   );
 };
 
 const ChurnAnalytics = () => {
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['churnPredictions'],
     queryFn: () => adminService.getChurnPredictions(),
     staleTime: 0,
@@ -45,120 +84,195 @@ const ChurnAnalytics = () => {
     refetchOnWindowFocus: false,
   });
 
-  // axios response → response.data → { predictions, users }
   const predictions = data?.data?.predictions || [];
-  const users       = data?.data?.users       || [];
+  const users = data?.data?.users || [];
 
-  const highCount   = predictions.filter(p => (p.churnRisk||'').toLowerCase() === 'high').length;
-  const mediumCount = predictions.filter(p => (p.churnRisk||'').toLowerCase() === 'medium').length;
-  const lowCount    = predictions.filter(p => (p.churnRisk||'').toLowerCase() === 'low').length;
+  const highCount = predictions.filter((p) => (p.churnRisk || '').toLowerCase() === 'high').length;
+  const mediumCount = predictions.filter((p) => (p.churnRisk || '').toLowerCase() === 'medium').length;
+  const lowCount = predictions.filter((p) => (p.churnRisk || '').toLowerCase() === 'low').length;
 
   if (isLoading) return <Loader />;
 
-  if (error) return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <p className="text-sm mb-3" style={{ color: '#f87171' }}>Failed to load churn predictions.</p>
-      <button onClick={() => refetch()}
-        className="px-4 py-2 rounded-lg text-xs font-semibold"
-        style={{ background: '#1a1a1a', color: '#a3a3a3', border: '1px solid #2a2a2a' }}>
-        Retry
-      </button>
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="bg-white border border-rose-200 rounded-2xl p-12 text-center shadow-xs">
+        <ExclamationTriangleIcon className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+        <h3 className="text-base font-bold text-slate-900 mb-1">Failed to compute churn telemetry</h3>
+        <p className="text-xs text-slate-500 mb-4 max-w-sm mx-auto">
+          The machine learning inference subprocess or analytics service encountered an error.
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xs"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+        >
+          <ArrowPathIcon className="w-4 h-4" />
+          <span>Retry Inference</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold" style={{ color: '#f5f5f5' }}>Churn Analytics</h2>
-          <p className="text-sm mt-0.5" style={{ color: '#525252' }}>
-            AI-powered risk scores for customers at risk of churning.
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200/80 text-[11px] font-bold mb-1">
+            <SparklesIcon className="w-3.5 h-3.5" />
+            <span>XGBoost Pipeline v2 Intelligence</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+            Customer Churn Analytics
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+            Predictive retention model analyzing order gaps, spend trends, and engagement signals.
           </p>
         </div>
-        <button onClick={() => refetch()}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
-          style={{ background: '#1a1a1a', color: '#a3a3a3', border: '1px solid #2a2a2a' }}>
-          ↻ Refresh
+
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-all active:scale-95 disabled:opacity-50 self-start sm:self-auto"
+        >
+          <ArrowPathIcon className={`w-4 h-4 ${isFetching ? 'animate-spin text-violet-600' : 'text-slate-500'}`} />
+          <span>{isFetching ? 'Re-analyzing...' : 'Refresh Telemetry'}</span>
         </button>
       </div>
 
-      {/* Risk Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* ── Risk Summary Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {[
-          { label: 'High Risk',   count: highCount,   ...riskMap.high },
-          { label: 'Medium Risk', count: mediumCount, ...riskMap.medium },
-          { label: 'Low Risk',    count: lowCount,    ...riskMap.low },
-        ].map(({ label, count, bg, color, barColor }) => (
-          <div key={label} className="rounded-xl p-5 relative overflow-hidden"
-            style={{ background: '#111111', border: '1px solid #1f1f1f' }}>
-            <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full blur-2xl pointer-events-none"
-              style={{ background: bg }} />
-            <p className="text-xs uppercase tracking-widest mb-2" style={{ color: '#525252' }}>{label}</p>
-            <p className="text-3xl font-semibold" style={{ color }}>{count}</p>
-            <p className="text-xs mt-1" style={{ color: '#404040' }}>customer{count !== 1 ? 's' : ''}</p>
-          </div>
-        ))}
+          { label: 'High Risk of Churn', count: highCount, key: 'high', desc: 'Critical immediate retention required' },
+          { label: 'Moderate Churn Risk', count: mediumCount, key: 'medium', desc: 'Decreasing shopping frequency' },
+          { label: 'Healthy & Loyal', count: lowCount, key: 'low', desc: 'Stable customer lifetime value' },
+        ].map(({ label, count, key, desc }) => {
+          const theme = riskTheme[key];
+          const Icon = theme.icon;
+
+          return (
+            <div
+              key={key}
+              className={`bg-white border ${theme.cardBorder} rounded-2xl p-6 shadow-xs relative overflow-hidden flex flex-col justify-between`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    {label}
+                  </p>
+                  <p className={`text-3xl font-black ${theme.statText} tracking-tight`}>
+                    {count}
+                  </p>
+                </div>
+                <div className={`p-3 rounded-xl ${theme.bg} shadow-xs`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 font-medium mt-4">
+                {desc}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Predictions Table */}
-      <div className="rounded-xl overflow-hidden" style={{ background: '#111111', border: '1px solid #1f1f1f' }}>
-        <div className="px-6 py-4" style={{ borderBottom: '1px solid #1a1a1a' }}>
-          <h3 className="text-sm font-semibold" style={{ color: '#e5e5e5' }}>
-            At-Risk Customers
-            {predictions.length > 0 && (
-              <span className="ml-2 text-xs px-2 py-0.5 rounded-md"
-                style={{ background: '#1a1a1a', color: '#737373' }}>
-                {predictions.length} total
-              </span>
-            )}
-          </h3>
+      {/* ── Predictions Table Card ── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+              Cohort Telemetry & Risk Scores
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Ranked in descending order by machine learning churn likelihood
+            </p>
+          </div>
+          {predictions.length > 0 && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 self-start sm:self-auto">
+              {predictions.length} Evaluated Customers
+            </span>
+          )}
         </div>
+
         <div className="overflow-x-auto">
-          <table className="min-w-full">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
-                {['Customer', 'Risk Level', 'Probability', 'Reason', 'Last Order'].map((h, i) => (
-                  <th key={i} className="px-5 py-3 text-left text-xs font-medium uppercase tracking-widest"
-                    style={{ color: '#404040' }}>{h}</th>
-                ))}
+              <tr className="bg-slate-50/75 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Customer Name & Contact</th>
+                <th className="px-6 py-3.5">Risk Category</th>
+                <th className="px-6 py-3.5 min-w-[160px]">Churn Probability</th>
+                <th className="px-6 py-3.5">Model Justification</th>
+                <th className="px-6 py-3.5">Recency</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 text-sm">
               {predictions.map((pred, idx) => {
                 const user = users[idx];
+                const initial = (user?.name || 'C').charAt(0).toUpperCase();
+
                 return (
-                  <tr key={idx}
-                    style={{ borderBottom: '1px solid #161616', transition: 'background 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#141414'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td className="px-5 py-3.5">
-                      <p className="text-sm font-medium" style={{ color: '#e5e5e5' }}>{user?.name || '—'}</p>
-                      <p className="text-xs" style={{ color: '#404040' }}>{user?.email || '—'}</p>
+                  <tr
+                    key={idx}
+                    className="hover:bg-slate-50/80 transition-colors duration-150"
+                  >
+                    {/* Customer */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0"
+                          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+                        >
+                          {initial}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate leading-tight">
+                            {user?.name || 'Customer Account'}
+                          </p>
+                          <p className="text-xs text-slate-400 font-medium truncate">
+                            {user?.email || '—'}
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-5 py-3.5"><RiskBadge risk={pred.churnRisk} /></td>
-                    <td className="px-5 py-3.5 w-40">
+
+                    {/* Risk Badge */}
+                    <td className="px-6 py-4">
+                      <RiskBadge risk={pred.churnRisk} />
+                    </td>
+
+                    {/* Probability Meter */}
+                    <td className="px-6 py-4">
                       <ProbabilityBar value={pred.probability} risk={pred.churnRisk} />
                     </td>
-                    <td className="px-5 py-3.5 max-w-xs">
-                      <p className="text-sm" style={{ color: '#737373' }}>{pred.reason || '—'}</p>
+
+                    {/* Reason */}
+                    <td className="px-6 py-4 max-w-xs">
+                      <p className="text-xs font-medium text-slate-600 line-clamp-2">
+                        {pred.reason || 'Sufficient order engagement'}
+                      </p>
                     </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-sm" style={{ color: '#525252' }}>
-                        {user?.daysSinceLastOrder != null
-                          ? user.daysSinceLastOrder === 999 ? 'Never ordered' : `${user.daysSinceLastOrder}d ago`
-                          : '—'}
-                      </span>
+
+                    {/* Recency */}
+                    <td className="px-6 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                      {user?.daysSinceLastOrder != null
+                        ? user.daysSinceLastOrder === 999
+                          ? 'Never purchased'
+                          : `${user.daysSinceLastOrder} days ago`
+                        : '—'}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+
           {predictions.length === 0 && (
             <div className="py-16 text-center">
-              <p className="text-sm" style={{ color: '#404040' }}>No churn predictions available.</p>
-              <p className="text-xs mt-1" style={{ color: '#2a2a2a' }}>Ensure users exist in the database.</p>
+              <ChartBarIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">No churn predictions available</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Ensure customer accounts and order history exist in the system
+              </p>
             </div>
           )}
         </div>

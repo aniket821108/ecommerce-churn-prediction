@@ -177,16 +177,36 @@ The prediction runs via Python `child_process.spawn` from Node.js, with a built-
 |--------|----------|-------------|
 | `POST` | `/api/auth/send-otp` | Send OTP for registration |
 | `POST` | `/api/auth/verify-otp` | Verify OTP & create account |
-| `POST` | `/api/auth/login` | User login |
+| `POST` | `/api/auth/login` | User login (HttpOnly cookies) |
+| `POST` | `/api/auth/refresh-token` | Silent token refresh |
 | `GET` | `/api/auth/me` | Get current user |
-| `GET` | `/api/products` | List products |
+| `GET` | `/api/products` | List & filter products |
 | `GET` | `/api/products/:id` | Product details |
 | `GET/POST` | `/api/cart` | Cart operations |
 | `POST` | `/api/orders` | Create order |
-| `GET` | `/api/orders` | User order history |
+| `GET` | `/api/orders/my-orders` | User order history |
 | `GET` | `/api/admin/dashboard` | Admin dashboard stats |
-| `GET` | `/api/admin/churn-predictions` | ML churn analysis |
-| `GET` | `/health` | Health check |
+| `GET` | `/api/admin/analytics/churn` | ML churn risk analysis |
+| `GET` | `/health` | Health & uptime check |
+
+See [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) for the complete API reference.
+
+---
+
+## 📚 Project Documentation Knowledge Base
+
+Comprehensive architecture, security, database, and implementation documentation is available in the [`docs/`](docs/) directory:
+
+- [**Project Overview**](docs/PROJECT_OVERVIEW.md) — System purpose, user personas, and status inventory.
+- [**System Architecture**](docs/ARCHITECTURE.md) — Sequence diagrams, component diagrams, and cross-cutting design.
+- [**Codebase Map**](docs/CODEBASE_MAP.md) — Directory structure and component responsibility matrix.
+- [**Database Schema**](docs/DATABASE.md) — MongoDB schemas, Mongoose models, indexes, and integrity analysis.
+- [**API Documentation**](docs/API_DOCUMENTATION.md) — Complete endpoint specs, parameters, and error formats.
+- [**Current Implementation**](docs/CURRENT_IMPLEMENTATION.md) — Verification audit, partial implementations, and dead code.
+- [**Security Review**](docs/SECURITY_REVIEW.md) — Threat models, vulnerability reports, and defensive controls.
+- [**Known Issues & Defect Log**](docs/KNOWN_ISSUES.md) — Detailed defect reports with reproduction and fixes.
+- [**Feature Roadmap**](docs/FEATURE_ROADMAP.md) — 3-track learning implementation plan (Foundational, Industry, Advanced).
+- [**Agent Guide**](AGENTS.md) — Standards and operational constraints for AI agents and developers.
 
 ---
 

@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "dev": "nodemon",
     "debug": "nodemon --inspect src/server.js",
-    "test": "jest",
+    "test": "jest --runInBand",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "seed": "node scripts/seed.js",

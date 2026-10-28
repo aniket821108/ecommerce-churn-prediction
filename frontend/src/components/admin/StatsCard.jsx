@@ -1,59 +1,81 @@
-const StatsCard = ({ title, value, icon: Icon, color = 'violet', trend, trendLabel }) => {
-  const colorMap = {
-    violet: { accent: '#7c3aed', glow: 'rgba(124,58,237,0.15)', iconBg: '#1e1333', iconColor: '#a78bfa' },
-    green:  { accent: '#16a34a', glow: 'rgba(22,163,74,0.15)',  iconBg: '#0d2015', iconColor: '#4ade80' },
-    red:    { accent: '#dc2626', glow: 'rgba(220,38,38,0.15)',  iconBg: '#200d0d', iconColor: '#f87171' },
-    yellow: { accent: '#d97706', glow: 'rgba(217,119,6,0.15)',  iconBg: '#1f1608', iconColor: '#fbbf24' },
-    cyan:   { accent: '#0891b2', glow: 'rgba(8,145,178,0.15)',  iconBg: '#071520', iconColor: '#22d3ee' },
-    blue:   { accent: '#2563eb', glow: 'rgba(37,99,235,0.15)',  iconBg: '#0d1529', iconColor: '#60a5fa' },
-  };
+const colorThemes = {
+  violet: {
+    iconBg: 'bg-violet-50',
+    iconText: 'text-violet-600',
+    borderHover: 'group-hover:border-violet-300',
+    badgeBg: 'bg-violet-50 text-violet-700',
+  },
+  blue: {
+    iconBg: 'bg-blue-50',
+    iconText: 'text-blue-600',
+    borderHover: 'group-hover:border-blue-300',
+    badgeBg: 'bg-blue-50 text-blue-700',
+  },
+  cyan: {
+    iconBg: 'bg-cyan-50',
+    iconText: 'text-cyan-600',
+    borderHover: 'group-hover:border-cyan-300',
+    badgeBg: 'bg-cyan-50 text-cyan-700',
+  },
+  green: {
+    iconBg: 'bg-emerald-50',
+    iconText: 'text-emerald-600',
+    borderHover: 'group-hover:border-emerald-300',
+    badgeBg: 'bg-emerald-50 text-emerald-700',
+  },
+  red: {
+    iconBg: 'bg-rose-50',
+    iconText: 'text-rose-600',
+    borderHover: 'group-hover:border-rose-300',
+    badgeBg: 'bg-rose-50 text-rose-700',
+  },
+  yellow: {
+    iconBg: 'bg-amber-50',
+    iconText: 'text-amber-600',
+    borderHover: 'group-hover:border-amber-300',
+    badgeBg: 'bg-amber-50 text-amber-700',
+  },
+};
 
-  const c = colorMap[color] || colorMap.violet;
-
-  const trendPositive = trend > 0;
+const StatsCard = (props) => {
+  const { title, value, icon, color = 'violet', trend, trendLabel, subtitle } = props;
+  const CardIcon = icon;
+  const theme = colorThemes[color] || colorThemes.violet;
+  const isPositive = trend > 0;
 
   return (
     <div
-      className="relative rounded-xl p-5 overflow-hidden"
-      style={{
-        background: '#111111',
-        border: '1px solid #1f1f1f',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = '#2a2a2a';
-        e.currentTarget.style.boxShadow = `0 0 0 1px #2a2a2a, 0 8px 32px rgba(0,0,0,0.4)`;
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = '#1f1f1f';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
+      className={`group relative bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden ${theme.borderHover}`}
     >
-      {/* Glow blob */}
-      <div
-        className="absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl pointer-events-none"
-        style={{ background: c.glow }}
-      />
-
-      <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-widest mb-3" style={{ color: '#525252' }}>
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             {title}
           </p>
-          <p className="text-2xl font-semibold tracking-tight" style={{ color: '#f5f5f5' }}>
+          <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             {value}
           </p>
-          {trend !== undefined && (
-            <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: trendPositive ? '#4ade80' : '#f87171' }}>
-              {trendPositive ? '↑' : '↓'} {Math.abs(trend)}% {trendLabel || 'vs last month'}
-            </p>
-          )}
+
+          {trend !== undefined ? (
+            <div className="flex items-center gap-1.5 text-xs font-semibold pt-1">
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded-md font-bold ${
+                  isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                }`}
+              >
+                {isPositive ? '↑' : '↓'} {Math.abs(trend)}%
+              </span>
+              <span className="text-slate-400 font-medium">{trendLabel || 'vs previous'}</span>
+            </div>
+          ) : subtitle ? (
+            <p className="text-xs text-slate-400 font-medium pt-0.5">{subtitle}</p>
+          ) : null}
         </div>
+
         <div
-          className="p-2.5 rounded-lg flex-shrink-0"
-          style={{ background: c.iconBg }}
+          className={`p-3 rounded-xl ${theme.iconBg} ${theme.iconText} transition-transform duration-200 group-hover:scale-110 flex-shrink-0 shadow-xs`}
         >
-          <Icon className="h-5 w-5" style={{ color: c.iconColor }} />
+          {CardIcon && <CardIcon className="w-6 h-6" />}
         </div>
       </div>
     </div>

@@ -15,11 +15,17 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const itemCount = items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const itemCount = isAuthenticated && !isAdmin
+    ? items?.reduce((sum, item) => sum + item.quantity, 0) || 0
+    : 0;
 
   useEffect(() => {
-    if (isAuthenticated) fetchCart();
-  }, [isAuthenticated]);
+    if (isAuthenticated && !isAdmin) {
+      fetchCart();
+    } else if (!isAuthenticated && items?.length > 0) {
+      useCartStore.getState().resetCartLocal();
+    }
+  }, [isAuthenticated, isAdmin, items?.length]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -235,6 +241,12 @@ const Header = () => {
               {!isAdmin && (
                 <Link to="/shop" className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">
                   Shop
+                </Link>
+              )}
+              {isAdmin && (
+                <Link to="/admin" className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold text-violet-700 bg-violet-50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                  Admin Dashboard
                 </Link>
               )}
               {!isAuthenticated && (

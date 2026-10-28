@@ -19,11 +19,11 @@ const commonValidators = {
     .normalizeEmail(),
 
   password: body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
     .withMessage(
-      'Password must contain at least one uppercase, one lowercase, and one number'
+      'Password must contain uppercase, lowercase, number, and special character'
     ),
 
   phone: body('phone')
@@ -162,8 +162,11 @@ const validateFile = (req, res, next) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
   const maxSize = 5 * 1024 * 1024; // 5MB
 
+  const { cleanupFiles } = require('../utils/fileUtils');
+
   for (const file of files) {
     if (!allowedTypes.includes(file.mimetype)) {
+      cleanupFiles(files);
       return res.status(400).json({
         success: false,
         message: `Invalid file type: ${file.mimetype}. Allowed types: ${allowedTypes.join(', ')}`
@@ -171,6 +174,7 @@ const validateFile = (req, res, next) => {
     }
 
     if (file.size > maxSize) {
+      cleanupFiles(files);
       return res.status(400).json({
         success: false,
         message: `File size too large: ${file.originalname}. Max size is 5MB`
@@ -189,6 +193,11 @@ const validate = (req, res, next) => {
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
+    // Clean up uploaded files if request validation fails
+    const { cleanupFiles } = require('../utils/fileUtils');
+    if (req.file) cleanupFiles(req.file);
+    if (req.files) cleanupFiles(req.files);
+
     return res.status(400).json({
       success: false,
       errors: errors.array().map(err => ({

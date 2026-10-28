@@ -2,172 +2,256 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productService } from '../../services/productService';
 import Loader from '../../components/common/Loader';
-import { PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
+import {
+  PencilSquareIcon,
+  TrashIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+  SparklesIcon,
+  TagIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import ProductForm from '../../components/admin/ProductForm';
 
-// ── Shared helpers ────────────────────────────────────────
-const stockStyle = (stock) => {
-  if (stock === 0)   return { bg: '#200d0d', color: '#f87171', label: 'Out of stock' };
-  if (stock <= 10)   return { bg: '#1f1608', color: '#fbbf24', label: `${stock} units` };
-  return               { bg: '#0d2015', color: '#4ade80', label: `${stock} units` };
-};
-
-const activeStyle = (isActive) =>
-  isActive
-    ? { bg: '#0d2015', color: '#4ade80', label: 'Active' }
-    : { bg: '#200d0d', color: '#f87171', label: 'Inactive' };
-
-const Chip = ({ bg, color, label }) => (
-  <span
-    className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium"
-    style={{ background: bg, color }}
-  >
-    {label}
-  </span>
-);
+const categories = [
+  'electronics',
+  'clothing',
+  'home',
+  'books',
+  'beauty',
+  'sports',
+  'other',
+];
 
 const ProductsManagement = () => {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['adminProducts', page],
-    queryFn: () => productService.getProducts({ page, limit: 10 }),
+    queryKey: ['adminProducts', page, search, categoryFilter],
+    queryFn: () =>
+      productService.getProducts({
+        page,
+        limit: 10,
+        search: search || undefined,
+        category: categoryFilter || undefined,
+      }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => productService.deleteProduct(id),
     onSuccess: () => {
       queryClient.invalidateQueries(['adminProducts']);
-      toast.success('Product deleted');
+      toast.success('Product removed from catalog');
     },
-    onError: (error) => toast.error(error.response?.data?.message || 'Failed to delete'),
+    onError: (error) => toast.error(error.response?.data?.message || 'Failed to delete product'),
   });
 
   const products = data?.data?.products || [];
   const pagination = data?.data?.pagination || {};
 
-  if (isLoading) return <Loader />;
+  if (isLoading && !data) return <Loader />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-200">
       <ProductForm
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         productToEdit={editingProduct}
       />
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
+      {/* ── Page Header & Actions ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold" style={{ color: '#f5f5f5' }}>Products</h2>
-          <p className="text-sm mt-0.5" style={{ color: '#525252' }}>
-            {products.length} product{products.length !== 1 ? 's' : ''} on this page
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+            Inventory & Catalog
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+            Manage your store's products, pricing, stock levels, and promotional spotlights.
           </p>
         </div>
+
         <button
-          onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
-          style={{ background: '#7c3aed', color: '#fff' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
-          onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          onClick={() => {
+            setEditingProduct(null);
+            setIsModalOpen(true);
+          }}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-xs hover:shadow-md transition-all active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
         >
-          <PlusIcon className="h-4 w-4" />
-          Add Product
+          <PlusIcon className="w-4 h-4 stroke-[2.5]" />
+          <span>Add New Product</span>
         </button>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl overflow-hidden" style={{ background: '#111111', border: '1px solid #1f1f1f' }}>
+      {/* ── Search & Filter Controls Bar ── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search products by title or brand..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <TagIcon className="w-4 h-4 text-slate-400 hidden sm:inline" />
+          <select
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setPage(1);
+            }}
+            className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-700 font-medium focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none capitalize"
+          >
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c} className="capitalize">
+                {c.charAt(0).toUpperCase() + c.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ── Modern Table Card ── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
-                {['Product', 'Price', 'Stock', 'Category', 'Status', ''].map((h, i) => (
-                  <th
-                    key={i}
-                    className={`px-5 py-3 text-xs font-medium uppercase tracking-widest ${i === 5 ? 'text-right' : 'text-left'}`}
-                    style={{ color: '#404040' }}
-                  >
-                    {h}
-                  </th>
-                ))}
+              <tr className="bg-slate-50/75 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Product Info</th>
+                <th className="px-6 py-3.5">Price</th>
+                <th className="px-6 py-3.5">Inventory</th>
+                <th className="px-6 py-3.5">Category</th>
+                <th className="px-6 py-3.5">Visibility</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 text-sm">
               {products.map((product) => {
-                const s = stockStyle(product.stock);
-                const a = activeStyle(product.isActive);
+                const stock = product.stock ?? 0;
+                const isOutOfStock = stock <= 0;
+                const isLowStock = stock > 0 && stock <= 10;
+
                 return (
                   <tr
                     key={product._id}
-                    style={{ borderBottom: '1px solid #161616', transition: 'background 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#141414'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    className="hover:bg-slate-50/80 transition-colors duration-150"
                   >
                     {/* Product */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3.5">
                         <img
                           src={product.images?.[0]?.url || '/placeholder.png'}
                           alt={product.name}
-                          className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
-                          style={{ border: '1px solid #2a2a2a' }}
+                          className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-slate-200 shadow-xs bg-slate-50"
                         />
-                        <div>
-                          <p className="text-sm font-medium" style={{ color: '#e5e5e5' }}>{product.name}</p>
-                          {product.sku && <p className="text-xs" style={{ color: '#404040' }}>{product.sku}</p>}
+                        <div className="min-w-0 max-w-xs">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-slate-900 truncate">{product.name}</p>
+                            {product.isFeatured && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-violet-50 text-violet-700 border border-violet-200/80 text-[10px] font-bold">
+                                <SparklesIcon className="w-2.5 h-2.5" />
+                                Featured
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                            {product.brand ? `Brand: ${product.brand}` : 'No brand specified'}
+                          </p>
                         </div>
                       </div>
                     </td>
 
                     {/* Price */}
-                    <td className="px-5 py-3.5">
-                      <span className="text-sm font-mono" style={{ color: '#a3a3a3' }}>
-                        ₹{(product.price || 0).toLocaleString('en-IN')}
-                      </span>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-extrabold text-slate-900 font-mono">
+                          ₹{(product.price || 0).toLocaleString('en-IN')}
+                        </span>
+                        {product.compareAtPrice && product.compareAtPrice > product.price && (
+                          <span className="text-xs text-slate-400 line-through font-mono">
+                            ₹{product.compareAtPrice.toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Stock */}
-                    <td className="px-5 py-3.5">
-                      <Chip bg={s.bg} color={s.color} label={s.label} />
+                    <td className="px-6 py-4">
+                      {isOutOfStock ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          Out of Stock
+                        </span>
+                      ) : isLowStock ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          Low: {stock} units
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {stock} in stock
+                        </span>
+                      )}
                     </td>
 
                     {/* Category */}
-                    <td className="px-5 py-3.5">
-                      <span className="text-sm capitalize" style={{ color: '#737373' }}>
-                        {product.category}
+                    <td className="px-6 py-4">
+                      <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 capitalize">
+                        {product.category || 'General'}
                       </span>
                     </td>
 
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      <Chip bg={a.bg} color={a.color} label={a.label} />
+                    {/* Visibility */}
+                    <td className="px-6 py-4">
+                      {product.isActive !== false ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Live on Store
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                          Hidden
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}
-                          className="p-1.5 rounded-lg transition-colors"
-                          style={{ color: '#525252' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.color = '#a78bfa'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#525252'; }}
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setIsModalOpen(true);
+                          }}
+                          className="p-2 rounded-xl text-slate-500 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                          title="Edit product"
                         >
-                          <PencilIcon className="h-4 w-4" />
+                          <PencilSquareIcon className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => { if (window.confirm('Delete this product?')) deleteMutation.mutate(product._id); }}
-                          className="p-1.5 rounded-lg transition-colors"
-                          style={{ color: '#525252' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.color = '#f87171'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#525252'; }}
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
+                              deleteMutation.mutate(product._id);
+                            }
+                          }}
+                          className="p-2 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete product"
                         >
-                          <TrashIcon className="h-4 w-4" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -179,33 +263,36 @@ const ProductsManagement = () => {
 
           {products.length === 0 && (
             <div className="py-16 text-center">
-              <p className="text-sm" style={{ color: '#404040' }}>No products found.</p>
+              <TagIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">No products match your criteria</p>
+              <p className="text-xs text-slate-400 mt-0.5">Try clearing filters or search query</p>
             </div>
           )}
         </div>
 
-        {/* Pagination */}
+        {/* ── Pagination ── */}
         {pagination.totalPages > 1 && (
-          <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderTop: '1px solid #1a1a1a' }}>
-            <span className="text-xs" style={{ color: '#525252' }}>
-              Page {page} of {pagination.totalPages}
+          <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">
+              Showing page <strong className="text-slate-800">{page}</strong> of{' '}
+              <strong className="text-slate-800">{pagination.totalPages}</strong>
             </span>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-30"
-                style={{ background: '#1a1a1a', color: '#a3a3a3', border: '1px solid #2a2a2a' }}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs"
               >
-                Prev
+                <ChevronLeftIcon className="w-3.5 h-3.5" />
+                <span>Prev</span>
               </button>
               <button
-                disabled={page === pagination.totalPages}
-                onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-30"
-                style={{ background: '#1a1a1a', color: '#a3a3a3', border: '1px solid #2a2a2a' }}
+                disabled={page >= pagination.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs"
               >
-                Next
+                <span>Next</span>
+                <ChevronRightIcon className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

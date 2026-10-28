@@ -1,41 +1,51 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { verifyAccessToken } = require('../utils/jwt');
+const User   = require('../models/User');
 const logger = require('../utils/logger');
 
+// ── Main auth middleware ──────────────────────────────
 const authenticate = async (req, res, next) => {
   try {
     let token;
-    if (req.headers.authorization?.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies?.accessToken) {
+
+    // Priority: HttpOnly cookie > Bearer header
+    if (req.cookies?.accessToken) {
       token = req.cookies.accessToken;
+    } else if (req.headers.authorization?.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
     }
 
     if (!token) {
       return res.status(401).json({ success: false, message: 'Please authenticate to access this resource' });
     }
 
-    const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
-    if (!secret) {
-      logger.error('JWT access secret not defined!');
-      return res.status(500).json({ success: false, message: 'Server configuration error' });
-    }
-
     let decoded;
     try {
-      decoded = jwt.verify(token, secret);
+      decoded = verifyAccessToken(token);
     } catch (err) {
-      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      if (err.name === 'TokenExpiredError') {
+        // Frontend should try to refresh
+        return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' });
+      }
+      return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 
-    // ✅ decoded.id — matches authController.js jwt.sign({ id }, ...)
-    const user = await User.findById(decoded.id).select('+isActive +role');
+    const user = await User.findById(decoded.id).select('+isActive +role +tokenVersion');
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'User no longer exists or is inactive' });
     }
 
+    // Check tokenVersion — revoked if mismatch
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== (user.tokenVersion || 0)) {
+      return res.status(401).json({ success: false, message: 'Token has been revoked', code: 'TOKEN_REVOKED' });
+    }
+
+    // Check if password was changed after this token was issued
+    if (user.changedPasswordAfter && user.changedPasswordAfter(decoded.iat)) {
+      return res.status(401).json({ success: false, message: 'Password recently changed. Please login again.', code: 'PASSWORD_CHANGED' });
+    }
+
     req.user     = user;
-    req.userId   = user._id;
+    req.userId   = user._id.toString();
     req.userRole = user.role;
     next();
   } catch (error) {
@@ -44,28 +54,39 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// ── Role-based authorization — 403 Forbidden ─────────
 const authorize = (...roles) => (req, res, next) => {
   if (!req.userRole || !roles.includes(req.userRole)) {
+    if (req.userRole === 'admin' && roles.includes('user') && !roles.includes('admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrative accounts cannot perform customer shopping actions. Please use a standard customer account.',
+        code: 'ADMIN_SHOPPING_RESTRICTED'
+      });
+    }
     return res.status(403).json({ success: false, message: `Access denied. Required roles: ${roles.join(', ')}` });
   }
   next();
 };
 
+// ── Optional auth (non-blocking) ─────────────────────
 const optionalAuth = async (req, res, next) => {
   try {
     let token;
-    if (req.headers.authorization?.startsWith('Bearer')) token = req.headers.authorization.split(' ')[1];
-    else if (req.cookies?.accessToken) token = req.cookies.accessToken;
+    if (req.cookies?.accessToken) token = req.cookies.accessToken;
+    else if (req.headers.authorization?.startsWith('Bearer')) token = req.headers.authorization.split(' ')[1];
 
-    const secret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
-    if (token && secret) {
+    if (token) {
       try {
-        const decoded = jwt.verify(token, secret);
-        const user = await User.findById(decoded.id).select('+isActive +role');
+        const decoded = verifyAccessToken(token);
+        const user = await User.findById(decoded.id).select('+isActive +role +tokenVersion');
         if (user && user.isActive) {
-          req.user = user; req.userId = user._id; req.userRole = user.role;
+          // Verify tokenVersion
+          if (decoded.tokenVersion === undefined || decoded.tokenVersion === (user.tokenVersion || 0)) {
+            req.user = user; req.userId = user._id.toString(); req.userRole = user.role;
+          }
         }
-      } catch (_) {}
+      } catch (_) { /* silently ignore — optional */ }
     }
     next();
   } catch (error) { next(); }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderService } from '../services/orderService';
+import useAuthStore from '../store/authStore';
 import Loader from '../components/common/Loader';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
@@ -106,7 +107,8 @@ const Card = ({ title, children, action }) => (
 // ── Main Component ─────────────────────────────────────────
 const OrderDetail = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -133,11 +135,13 @@ const OrderDetail = () => {
   if (error || !order) return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <p className="text-red-500 font-semibold mb-3">Order not found.</p>
-      <Link to="/orders" className="text-sm text-indigo-600 hover:underline">← Back to Orders</Link>
+      <Link to={isAdmin ? '/admin/orders' : '/orders'} className="text-sm text-indigo-600 hover:underline">
+        {isAdmin ? '← Back to Admin Orders' : '← Back to Orders'}
+      </Link>
     </div>
   );
 
-  const canCancel = ['pending', 'processing'].includes(order.status);
+  const canCancel = !isAdmin && ['pending', 'processing'].includes(order.status);
 
   return (
     <div className="max-w-4xl mx-auto pb-16 space-y-6">
@@ -145,11 +149,11 @@ const OrderDetail = () => {
       {/* ── Header ── */}
       <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <Link to="/orders" className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mb-2 transition-colors">
+          <Link to={isAdmin ? '/admin/orders' : '/orders'} className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mb-2 transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            All Orders
+            {isAdmin ? 'Back to Admin Orders' : 'All Orders'}
           </Link>
           <h1 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>
             Order #{order.orderNumber || id.slice(-8).toUpperCase()}

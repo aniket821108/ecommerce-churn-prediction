@@ -114,6 +114,10 @@ const startServer = async () => {
       console.log(`🌍 Mode: ${process.env.NODE_ENV || 'development'}`);
       console.log("=================================");
 
+      // Auto-sweep any orphaned temp files in uploads directory
+      const { sweepTempDirectory } = require('./utils/fileUtils');
+      sweepTempDirectory(path.join(__dirname, '../uploads'));
+
       // ✅ Warm up Python ML model on server start
       warmupPython();
     });

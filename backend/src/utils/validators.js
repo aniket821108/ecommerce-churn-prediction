@@ -19,19 +19,20 @@ const validatePhone = (phone) => {
 
 // Validate password strength
 const validatePassword = (password) => {
-  const minLength = 6;
+  const minLength = 8;
   const hasUpperCase = /[A-Z]/.test(password);
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumbers = /\d/.test(password);
   const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
   
   return {
-    isValid: password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers,
+    isValid: password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar,
     errors: {
       length: password.length < minLength ? `Must be at least ${minLength} characters` : null,
       uppercase: !hasUpperCase ? 'Must contain at least one uppercase letter' : null,
       lowercase: !hasLowerCase ? 'Must contain at least one lowercase letter' : null,
-      numbers: !hasNumbers ? 'Must contain at least one number' : null
+      numbers: !hasNumbers ? 'Must contain at least one number' : null,
+      specialChar: !hasSpecialChar ? 'Must contain at least one special character' : null
     }
   };
 };

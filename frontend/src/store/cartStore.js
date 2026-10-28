@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 const useCartStore = create(
   persist(
-    (set, get) => ({
+    (set) => ({
       items: [],
       subtotal: 0,
       loading: false,
@@ -20,6 +20,10 @@ const useCartStore = create(
             loading: false 
           });
         } catch (error) {
+          if (error.response?.data?.code === 'ADMIN_SHOPPING_RESTRICTED') {
+            set({ items: [], subtotal: 0, loading: false });
+            return;
+          }
           set({ loading: false });
           throw error;
         }
@@ -72,7 +76,15 @@ const useCartStore = create(
           toast.error('Failed to clear cart');
           throw error;
         }
-      }
+      },
+
+      // Client-only cart wipe on logout / unauthenticated session
+      resetCartLocal: () => {
+        set({ items: [], subtotal: 0, loading: false });
+        try {
+          localStorage.removeItem('cart-storage');
+        } catch (_) {}
+      },
     }),
     {
       name: 'cart-storage',

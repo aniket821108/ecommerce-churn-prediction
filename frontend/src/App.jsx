@@ -4,8 +4,8 @@ import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import useAuthStore from './store/authStore';
 
-// ✅ verify-otp added — no Header/Footer on this page
-const FULL_SCREEN_ROUTES = ['/login', '/register', '/verify-otp'];
+// ✅ Auth pages without container wrapping or Footer
+const FULL_SCREEN_ROUTES = ['/login', '/register', '/verify-otp', '/forgot-password'];
 
 function App() {
   const loadUser = useAuthStore((state) => state.loadUser);
@@ -13,7 +13,7 @@ function App() {
 
   useEffect(() => { loadUser(); }, []);
 
-  const isFullScreen = FULL_SCREEN_ROUTES.includes(location.pathname);
+  const isFullScreen = FULL_SCREEN_ROUTES.includes(location.pathname) || location.pathname.startsWith('/reset-password');
 
   return (
     <div className="min-h-screen flex flex-col">

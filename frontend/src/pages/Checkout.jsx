@@ -50,13 +50,21 @@ const STEPS = ['Shipping', 'Billing', 'Payment', 'Review'];
 const Checkout = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { items, subtotal, fetchCart, clearCart } = useCartStore();
+  const { items, fetchCart, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { fetchCart(); }, []);
   useEffect(() => {
-    if (items.length === 0 && !loading) navigate('/cart');
-  }, [items, navigate, loading]);
+    if (user?.role === 'admin') {
+      toast.error('Admin accounts cannot place orders.');
+      navigate('/admin');
+      return;
+    }
+    fetchCart();
+  }, [user, navigate, fetchCart]);
+
+  useEffect(() => {
+    if (user?.role !== 'admin' && items.length === 0 && !loading) navigate('/cart');
+  }, [items, navigate, loading, user?.role]);
 
   const methods = useForm({
     resolver: zodResolver(checkoutSchema),
@@ -108,17 +116,18 @@ const Checkout = () => {
     const orderResponse = await orderService.createFromCart(orderData);
     const order = orderResponse.data.order;
 
-    // 3. Calculate amount in paise
-    const amountInPaise = Math.round(order.total * 100);
+    // 2. Generate server-side Razorpay order
+    const rzpOrderResponse = await orderService.createRazorpayOrder(order._id);
+    const rzpData = rzpOrderResponse.data;
 
-    // 4. Open Razorpay popup
+    // 3. Open Razorpay popup with verified server order_id
     const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: amountInPaise,
+      key: rzpData.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: Math.round(order.total * 100),
       currency: 'INR',
       name: 'E-Shop',
       description: `Order #${order.orderNumber}`,
-      order_id: order.razorpayOrderId || undefined, // if you generate server-side Razorpay order
+      order_id: rzpData.orderId,
       prefill: {
         name: user?.name || '',
         email: user?.email || '',
@@ -127,21 +136,24 @@ const Checkout = () => {
       theme: { color: '#4f46e5' },
       modal: {
         ondismiss: () => {
-          toast.error('Payment cancelled.');
+          toast.error('Payment window closed. You can retry from your orders.');
           setLoading(false);
+          navigate(`/orders/${order._id}`);
         },
       },
       handler: async (razorpayResponse) => {
         try {
-          // ✅ Use user-accessible confirm-payment route
-          await orderService.confirmPayment(order._id, {
+          // Cryptographic HMAC-SHA256 signature verification on backend
+          await orderService.verifyRazorpayPayment(order._id, {
             razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+            razorpay_order_id: razorpayResponse.razorpay_order_id,
+            razorpay_signature: razorpayResponse.razorpay_signature,
           });
-          toast.success('Payment successful! 🎉');
+          toast.success('Payment verified successfully! 🎉');
           await clearCart();
           navigate(`/orders/${order._id}`);
         } catch (err) {
-          toast.error('Payment done but verification failed. Contact support.');
+          toast.error(err.response?.data?.message || 'Payment verification failed. Contact support.');
           navigate(`/orders/${order._id}`);
         }
       },
@@ -149,8 +161,9 @@ const Checkout = () => {
 
     const rzp = new window.Razorpay(options);
     rzp.on('payment.failed', (response) => {
-      toast.error(`Payment failed: ${response.error.description}`);
+      toast.error(`Payment failed: ${response.error?.description || 'Transaction declined'}`);
       setLoading(false);
+      navigate(`/orders/${order._id}`);
     });
     rzp.open();
   };

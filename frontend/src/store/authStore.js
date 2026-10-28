@@ -1,65 +1,67 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import authService from '../services/authService';
+import api from '../services/api';
 
 const useAuthStore = create(
   persist(
     (set) => ({
       user: null,
-      accessToken: null,
       isAuthenticated: false,
+      isLoading: true, // starts true until loadUser completes
 
-      // ✅ Called from OtpVerify + Login pages directly with user+token
-      login: (user, token) => {
-        localStorage.setItem('accessToken', token);
-        set({ user, accessToken: token, isAuthenticated: true });
+      // Set auth state (called after successful login/register)
+      setAuth: (user) => {
+        set({ user, isAuthenticated: true, isLoading: false });
       },
 
-      // ✅ Called from Login.jsx — fetches via authService
-      loginWithCredentials: async (email, password) => {
-        const response = await authService.login({ email, password });
-        // Backend returns: { success: true, token, user }
-        const { token, user } = response.data;
-        localStorage.setItem('accessToken', token);
-        set({ user, accessToken: token, isAuthenticated: true });
+      // Clear auth state (called on logout / token failure)
+      clearAuth: () => {
+        try { localStorage.removeItem('cart-storage'); } catch (_) {}
+        import('./cartStore').then(({ default: useCartStore }) => {
+          useCartStore.getState().resetCartLocal();
+        }).catch(() => {});
+        set({ user: null, isAuthenticated: false, isLoading: false });
+      },
+
+      // Login via API — tokens are set as HttpOnly cookies by the backend
+      loginWithCredentials: async (email, password, rememberMe = false) => {
+        const response = await api.post('/auth/login', { email, password, rememberMe });
+        set({ user: response.data.user, isAuthenticated: true, isLoading: false });
         return response;
       },
 
+      // Logout — clears server session + cookies + local state
       logout: async () => {
-        try { await authService.logout(); } catch (_) {}
-        finally {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          set({ user: null, accessToken: null, isAuthenticated: false });
-          window.location.href = '/';
-        }
+        try { await api.post('/auth/logout'); } catch (_) {}
+        try { localStorage.removeItem('cart-storage'); } catch (_) {}
+        const { default: useCartStore } = await import('./cartStore');
+        useCartStore.getState().resetCartLocal();
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        window.location.href = '/';
       },
 
+      // Load user from server using HttpOnly cookie
       loadUser: async () => {
         try {
-          const token = localStorage.getItem('accessToken');
-          if (!token) return;
-          const response = await authService.getMe();
-          set({ user: response.data.user, isAuthenticated: true });
+          const response = await api.get('/auth/me');
+          set({ user: response.data.user, isAuthenticated: true, isLoading: false });
         } catch (_) {
-          localStorage.removeItem('accessToken');
-          set({ user: null, accessToken: null, isAuthenticated: false });
+          set({ user: null, isAuthenticated: false, isLoading: false });
         }
       },
 
       updateProfile: async (data) => {
-        const response = await authService.updateDetails(data);
+        const response = await api.put('/users/profile', data);
         set({ user: response.data.user });
         return response;
       },
 
-      updatePassword: async (data) => authService.updatePassword(data),
+      updatePassword: async (data) => api.put('/auth/update-password', data),
     }),
     {
       name: 'auth-storage',
       partialize: (state) => ({
         user:            state.user,
-        accessToken:     state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
     }
