@@ -113,25 +113,38 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
         `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
       ).toString('base64');
 
-      const response = await axios.post(twilioUrl, params.toString(), {
-        headers: {
-          Authorization: `Basic ${authHeader}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 10000
-      });
+      try {
+        const response = await axios.post(twilioUrl, params.toString(), {
+          headers: {
+            Authorization: `Basic ${authHeader}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 10000
+        });
 
-      const messageId = response.data?.sid || `wa-tw-${Date.now()}`;
-      logger.info(`Twilio WhatsApp message sent to +${formattedPhone}: ${messageId}`);
+        const messageId = response.data?.sid || `wa-tw-${Date.now()}`;
+        logger.info(`Twilio WhatsApp message sent to +${formattedPhone}: ${messageId}`);
 
-      return {
-        success: true,
-        messageId,
-        recipientPhone: formattedPhone,
-        messageText,
-        waLink,
-        mode: 'twilio_api'
-      };
+        return {
+          success: true,
+          messageId,
+          recipientPhone: formattedPhone,
+          messageText,
+          waLink,
+          mode: 'twilio_api'
+        };
+      } catch (twErr) {
+        const twData = twErr.response?.data;
+        logger.warn(`Twilio WhatsApp dispatch failed (${twData?.code || twErr.message}):`, twData || twErr.message);
+
+        if (twData?.code === 21654 || twData?.code === 63016 || twData?.code === 63007) {
+          throw new Error(
+            `Twilio Sandbox Opt-In Required: To receive real messages, send your sandbox join keyword (e.g. "join <code-name>") from your WhatsApp (+${formattedPhone}) to +1 415 523 8886 first.`
+          );
+        }
+
+        throw new Error(twData?.message || twErr.message || 'Twilio WhatsApp dispatch failed');
+      }
     }
 
     // 3. Direct Web Link / Click-to-Chat Mode (Free, zero-setup, opens WhatsApp Web)
