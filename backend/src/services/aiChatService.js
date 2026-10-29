@@ -835,6 +835,12 @@ const sendWhatsappDealTool = async ({
       );
     }
 
+    const modeLabel = result.mode === 'cloud_api'
+      ? 'via Meta WhatsApp Cloud API'
+      : result.mode === 'twilio_api'
+      ? 'via Twilio WhatsApp API'
+      : 'via WhatsApp Web Click-to-Chat';
+
     return {
       success: true,
       messageId: result.messageId,
@@ -843,7 +849,7 @@ const sendWhatsappDealTool = async ({
       customerName: resolvedName,
       waLink: result.waLink,
       mode: result.mode,
-      message: `WhatsApp promotional deal successfully dispatched to **+${result.recipientPhone}**! Audit log entry recorded.`
+      message: `WhatsApp promotional deal successfully dispatched (${modeLabel}) to **+${result.recipientPhone}**! Audit log entry recorded.`
     };
   } catch (error) {
     logger.error('sendWhatsappDealTool error:', error);

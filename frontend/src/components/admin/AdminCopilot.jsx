@@ -9,7 +9,8 @@ import {
   CheckCircleIcon,
   ShieldCheckIcon,
   ChatBubbleLeftRightIcon,
-  ArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import chatService from '../../services/chatService';
@@ -185,7 +186,17 @@ const AdminCopilot = ({ isOpen, onClose }) => {
         discountPercent: draft.discountPercent
       });
 
-      toast.success(`WhatsApp deal dispatched to +${draft.customerPhone}!`);
+      const deliveryMode = res.data?.mode;
+      const targetWaLink = res.data?.waLink || draft.waLink;
+      const isAutomated = deliveryMode === 'cloud_api' || deliveryMode === 'twilio_api';
+
+      // If in Click-to-Chat / web link mode, automatically open WhatsApp Web in new tab
+      if (!isAutomated && targetWaLink) {
+        window.open(targetWaLink, '_blank', 'noopener,noreferrer');
+        toast.success(`Opening WhatsApp Web for +91 ${draft.customerPhone}... Click Send in WhatsApp!`);
+      } else {
+        toast.success(`WhatsApp deal dispatched via API to +91 ${draft.customerPhone}!`);
+      }
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -196,6 +207,8 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                   ...m.whatsappDraft,
                   sent: true,
                   sentAt: new Date(),
+                  deliveryMode,
+                  waLink: targetWaLink,
                   logId: res.data?.logId
                 }
               }
@@ -206,10 +219,20 @@ const AdminCopilot = ({ isOpen, onClose }) => {
       const confirmMsg = {
         id: `admin-wa-sent-${Date.now()}`,
         role: 'assistant',
-        content: `✅ **WhatsApp Deal Outreach Dispatched**\n\n` +
+        content: `✅ **WhatsApp Deal Outreach Action Completed**\n\n` +
           `• **Recipient:** ${draft.customerName} (\`+91 ${draft.customerPhone}\`)\n` +
           (draft.dealCode ? `• **Promo Code:** \`${draft.dealCode}\`\n` : '') +
-          `• **Delivery Mode:** ${res.data?.mode === 'cloud_api' ? 'WhatsApp Business Cloud API' : 'Deep Link Verified'}\n` +
+          `• **Delivery Channel:** ${
+            deliveryMode === 'cloud_api'
+              ? 'Meta WhatsApp Cloud API (Automated Server Dispatch)'
+              : deliveryMode === 'twilio_api'
+              ? 'Twilio WhatsApp API (Automated Server Dispatch)'
+              : 'Direct WhatsApp Web / Click-to-Chat (Opened in Browser)'
+          }\n` +
+          (!isAutomated
+            ? `ℹ️ **How to Send:** WhatsApp Web was opened with the promotional message pre-filled. Simply click **Send** in WhatsApp Web to deliver it directly to the customer's phone from your WhatsApp account.\n\n` +
+              `*Want zero-click background delivery without opening WhatsApp Web? Configure Meta Cloud API or Twilio API keys in \`backend/src/.env\`.*\n`
+            : '') +
           `• **Audit Log:** Recorded in AdminLog (Entity: \`user\`, Action: \`create\`) with admin signature.`,
         suggestions: ADMIN_STARTERS,
         timestamp: new Date()
@@ -458,7 +481,10 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                         </div>
                         {msg.whatsappDraft.sent ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircleIcon className="w-3 h-3" /> Dispatched & Logged
+                            <CheckCircleIcon className="w-3 h-3" />
+                            {msg.whatsappDraft.deliveryMode === 'cloud_api' || msg.whatsappDraft.deliveryMode === 'twilio_api'
+                              ? 'Delivered via API'
+                              : 'Opened in WhatsApp Web'}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -490,6 +516,14 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                         <div className="bg-emerald-50/40 rounded-lg p-2.5 border border-emerald-100 text-[11px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
                           {msg.whatsappDraft.message}
                         </div>
+
+                        {/* Transparency Informational Note */}
+                        <div className="bg-slate-50 border border-slate-200/70 rounded-lg p-2 text-[10px] text-slate-600 flex items-start gap-1.5">
+                          <InformationCircleIcon className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                          <span>
+                            Clicking <strong>Send via WhatsApp Web</strong> opens WhatsApp with this pre-filled message ready to dispatch from your own WhatsApp. (For zero-click server background delivery, add Meta Cloud API or Twilio credentials to <code className="bg-slate-200/80 px-1 py-0.5 rounded text-[9px]">backend/src/.env</code>).
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -501,7 +535,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                             className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1"
                           >
                             <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
-                            <span>Open in WhatsApp Web</span>
+                            <span>{msg.whatsappDraft.sent ? 'Re-open in WhatsApp Web' : 'Open in WhatsApp Web'}</span>
                           </a>
                         )}
 
@@ -529,14 +563,17 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                               ) : (
                                 <>
                                   <PaperAirplaneIcon className="w-3.5 h-3.5" />
-                                  <span>Confirm & Send</span>
+                                  <span>Send via WhatsApp Web</span>
                                 </>
                               )}
                             </button>
                           </div>
                         ) : (
                           <div className="ml-auto text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
-                            <CheckCircleIcon className="w-3.5 h-3.5" /> Sent & Tracked
+                            <CheckCircleIcon className="w-3.5 h-3.5" />
+                            {msg.whatsappDraft.deliveryMode === 'cloud_api' || msg.whatsappDraft.deliveryMode === 'twilio_api'
+                              ? 'Delivered via API'
+                              : 'Opened & Logged'}
                           </div>
                         )}
                       </div>
