@@ -107,7 +107,17 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
 
       params.append('From', fromNumber);
       params.append('To', `whatsapp:+${formattedPhone}`);
-      params.append('Body', messageText);
+
+      if (process.env.TWILIO_CONTENT_SID) {
+        params.append('ContentSid', process.env.TWILIO_CONTENT_SID.trim());
+        params.append('ContentVariables', JSON.stringify({
+          '1': data.customerName || 'Valued Customer',
+          '2': data.dealCode || 'SPECIAL25',
+          '3': data.discountPercent ? `${data.discountPercent}%` : '25%'
+        }));
+      } else {
+        params.append('Body', messageText);
+      }
 
       const authHeader = Buffer.from(
         `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
@@ -137,9 +147,15 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
         const twData = twErr.response?.data;
         logger.warn(`Twilio WhatsApp dispatch failed (${twData?.code || twErr.message}):`, twData || twErr.message);
 
-        if (twData?.code === 21654 || twData?.code === 63016 || twData?.code === 63007) {
+        if (twData?.code === 21654) {
           throw new Error(
-            `Twilio Sandbox Opt-In Required: To receive real messages, send your sandbox join keyword (e.g. "join <code-name>") from your WhatsApp (+${formattedPhone}) to +1 415 523 8886 first.`
+            `Twilio WhatsApp Template Required: Copy the Content SID (starts with "HX...") from Step 2 of your Twilio WhatsApp Tryout page and add TWILIO_CONTENT_SID=HX... in backend/src/.env.`
+          );
+        }
+
+        if (twData?.code === 63016 || twData?.code === 63007) {
+          throw new Error(
+            `Twilio Sandbox Opt-In Required: To receive real messages, send your sandbox join keyword from your WhatsApp (+${formattedPhone}) to ${fromNumber} first.`
           );
         }
 
