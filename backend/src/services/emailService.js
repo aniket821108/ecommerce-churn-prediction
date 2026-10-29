@@ -171,6 +171,47 @@ const emailTemplates = {
         </div>
       </div>
     `
+  }),
+
+  // ── CRM Promotional / Deal Outreach ────────────────────────
+  crmDeal: ({ customerName, subject, body, dealCode, discountPercent, adminName }) => ({
+    subject: subject || 'Special Offer from E-Shop! 🎉',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 20px;">
+        <div style="background: white; border-radius: 12px; padding: 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 4px solid #4F46E5;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <h1 style="color: #4F46E5; font-size: 26px; margin: 0;">E-Shop Exclusive Offer</h1>
+            <p style="color: #6B7280; margin-top: 4px; font-size: 13px;">Curated by your Store Concierge</p>
+          </div>
+          
+          <p style="color: #111827; font-size: 15px; margin-bottom: 12px;">Hello <strong>${customerName || 'Valued Customer'}</strong>,</p>
+          
+          <div style="color: #374151; font-size: 14px; line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap;">
+${body}
+          </div>
+
+          ${dealCode ? `
+          <div style="text-align: center; margin: 28px 0; background: #EEF2FF; border: 2px dashed #4F46E5; border-radius: 10px; padding: 16px;">
+            <span style="font-size: 12px; font-weight: 600; color: #4F46E5; text-transform: uppercase; letter-spacing: 1px;">Your Promo Code</span>
+            <p style="font-size: 28px; font-weight: bold; color: #1E1B4B; margin: 6px 0; letter-spacing: 2px;">${dealCode}</p>
+            ${discountPercent ? `<p style="font-size: 13px; color: #4338CA; margin: 0; font-weight: 600;">Get <strong>${discountPercent}% OFF</strong> on your next purchase!</p>` : ''}
+          </div>
+          ` : ''}
+
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/products"
+               style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+              Claim Offer & Shop Now
+            </a>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 28px 0;" />
+          <p style="text-align: center; color: #9CA3AF; font-size: 12px; margin: 0;">
+            Sent by the E-Shop Customer Success Team${adminName ? ` (${adminName})` : ''} · Secure Online Shopping
+          </p>
+        </div>
+      </div>
+    `
   })
 };
 

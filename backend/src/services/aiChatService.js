@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const AdminLog = require('../models/AdminLog');
 const logger = require('../utils/logger');
+const emailService = require('./emailService');
 const axios = require('axios');
 
 // ══════════════════════════════════════════════════════════════════
@@ -34,12 +35,14 @@ const searchCatalogTool = async ({
       filter.isFeatured = true;
     }
 
-    if (category && typeof category === 'string' && category.trim()) {
-      filter.category = new RegExp(`^${category.trim()}$`, 'i');
+    if (category && typeof category === 'string' && category.trim() && category !== 'all') {
+      const escapedCat = category.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.category = new RegExp(`^${escapedCat}$`, 'i');
     }
 
     if (brand && typeof brand === 'string' && brand.trim()) {
-      filter.brand = new RegExp(brand.trim(), 'i');
+      const escapedBrand = brand.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.brand = new RegExp(escapedBrand, 'i');
     }
 
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -58,12 +61,17 @@ const searchCatalogTool = async ({
     if (query && typeof query === 'string' && query.trim()) {
       const cleanQ = query.trim();
       const escapedQ = cleanQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
+      const orConditions = [
         { name: { $regex: escapedQ, $options: 'i' } },
-        { description: { $regex: escapedQ, $options: 'i' } },
-        { brand: { $regex: escapedQ, $options: 'i' } },
-        { category: { $regex: escapedQ, $options: 'i' } }
+        { description: { $regex: escapedQ, $options: 'i' } }
       ];
+      if (!filter.brand) {
+        orConditions.push({ brand: { $regex: escapedQ, $options: 'i' } });
+      }
+      if (!filter.category) {
+        orConditions.push({ category: { $regex: escapedQ, $options: 'i' } });
+      }
+      filter.$or = orConditions;
     }
 
     const maxResults = Math.min(Math.max(Number(limit) || 4, 1), 10);
@@ -262,6 +270,7 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
     }
 
     const statusSteps = ['pending', 'processing', 'shipped', 'delivered'];
+    const isCancelled = order.status === 'cancelled';
     const currentStepIndex = statusSteps.indexOf(order.status);
 
     return {
@@ -269,7 +278,8 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
       order: {
         orderNumber: order.orderNumber,
         status: order.status,
-        statusStep: currentStepIndex >= 0 ? currentStepIndex + 1 : 1,
+        isCancelled,
+        statusStep: isCancelled ? 0 : (currentStepIndex >= 0 ? currentStepIndex + 1 : 1),
         totalStatusSteps: statusSteps.length,
         total: order.total || order.totalPrice || 0,
         itemCount: order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 0,
@@ -279,7 +289,7 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
           price: item.price,
           image: item.image || item.product?.images?.[0]?.url || ''
         })) || [],
-        courier: order.courier || (order.status === 'shipped' ? 'BlueDart Express' : 'Pending dispatch'),
+        courier: order.courier || (order.status === 'shipped' ? 'BlueDart Express' : (isCancelled ? 'Cancelled' : 'Pending dispatch')),
         trackingNumber: order.trackingNumber || (order.status === 'shipped' ? 'TRK' + order._id.toString().slice(-8).toUpperCase() : null),
         estimatedDelivery: order.estimatedDelivery || null,
         createdAt: order.createdAt
@@ -454,7 +464,6 @@ const getChurnRiskTool = async () => {
       const daysSinceOrder = orderStat.lastOrderDate
         ? Math.floor((now - new Date(orderStat.lastOrderDate)) / (1000 * 60 * 60 * 24))
         : 999;
-      const accountAgeMonths = Math.max(1, Math.floor((now - new Date(u.createdAt)) / (1000 * 60 * 60 * 24 * 30)));
 
       let risk = 'low';
       let probability = 0.15;
@@ -526,6 +535,165 @@ const getRecentAuditLogsTool = async ({ limit = 5 }) => {
   }
 };
 
+/**
+ * Admin Tool 5: Prepare CRM Promotional / Deal Email Draft
+ * Generates structured email draft for admin review before dispatch.
+ */
+const draftCrmEmailTool = async ({
+  customerEmail,
+  customerName,
+  subject,
+  message,
+  dealCode,
+  discountPercent
+}) => {
+  try {
+    if (!customerEmail && !customerName) {
+      return {
+        success: false,
+        message: 'Please provide either a customer email address or customer name to compose a promotional email.'
+      };
+    }
+
+    let user = null;
+    if (customerEmail) {
+      user = await User.findOne({ email: new RegExp(`^${customerEmail.trim()}$`, 'i') }).select('_id name email').lean();
+    } else if (customerName) {
+      const escapedName = customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      user = await User.findOne({ name: new RegExp(escapedName, 'i') }).select('_id name email').lean();
+    }
+
+    const resolvedEmail = user?.email || customerEmail;
+    const resolvedName = user?.name || customerName || 'Valued Customer';
+
+    if (!resolvedEmail) {
+      return {
+        success: false,
+        message: `Could not identify an email address for customer "${customerName}". Please specify their email address.`
+      };
+    }
+
+    const formattedCode = dealCode ? dealCode.trim().toUpperCase() : (discountPercent ? `SAVE${discountPercent}` : 'SPECIALDEAL');
+    const defaultSubject = subject || `Exclusive Deal from E-Shop: Enjoy Special Savings with Code ${formattedCode}!`;
+    const defaultBody = message ||
+      `We appreciate your patronage at E-Shop! As one of our most valued shoppers, we are excited to offer you an exclusive promotional deal.\n\nUse your personalized code at checkout to unlock your special savings.`;
+
+    const draft = {
+      customerId: user?._id ? user._id.toString() : null,
+      customerEmail: resolvedEmail,
+      customerName: resolvedName,
+      subject: defaultSubject,
+      body: defaultBody,
+      dealCode: formattedCode,
+      discountPercent: discountPercent ? Number(discountPercent) : null,
+      requiresConfirmation: true
+    };
+
+    return {
+      success: true,
+      draft,
+      message: `I have composed a promotional email draft for **${resolvedName}** (<${resolvedEmail}>). Review the preview below and confirm to dispatch.`
+    };
+  } catch (error) {
+    logger.error('draftCrmEmailTool error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Admin Tool 6: Dispatch CRM Deal Email to Customer with Strict Audit Trail
+ */
+const sendCrmEmailTool = async ({
+  customerEmail,
+  customerName,
+  subject,
+  body,
+  dealCode,
+  discountPercent,
+  adminId,
+  adminName,
+  ip,
+  userAgent
+}) => {
+  try {
+    if (!customerEmail || !body) {
+      return {
+        success: false,
+        message: 'Customer email and email body are required to dispatch a promotional email.'
+      };
+    }
+
+    const cleanEmail = customerEmail.trim();
+
+    // Look up user if registered
+    const user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') }).select('_id name email').lean();
+    const resolvedName = customerName || user?.name || 'Valued Customer';
+
+    // Dispatch email via Nodemailer service
+    const mailResult = await emailService.sendEmail(cleanEmail, 'crmDeal', {
+      customerName: resolvedName,
+      subject: subject || 'Special Offer from E-Shop! 🎉',
+      body,
+      dealCode: dealCode ? dealCode.toUpperCase() : null,
+      discountPercent: discountPercent ? Number(discountPercent) : null,
+      adminName: adminName || 'Store Admin'
+    });
+
+    // Record strict Administrative Audit Trail
+    let logEntry = null;
+    if (adminId && AdminLog.logAction) {
+      logEntry = await AdminLog.logAction(
+        adminId,
+        'create',
+        'user',
+        user?._id || null,
+        {
+          type: 'crm_email',
+          customerEmail: cleanEmail,
+          customerName: resolvedName,
+          subject: subject || 'Special Offer from E-Shop! 🎉',
+          dealCode: dealCode || null,
+          discountPercent: discountPercent || null,
+          bodySnippet: body.slice(0, 160),
+          sentByAdmin: adminName || 'Admin'
+        },
+        ip || null,
+        userAgent || null
+      );
+    }
+
+    return {
+      success: true,
+      messageId: mailResult?.messageId,
+      logId: logEntry?._id ? logEntry._id.toString() : null,
+      customerEmail: cleanEmail,
+      customerName: resolvedName,
+      message: `Promotional email successfully dispatched to **${cleanEmail}**! Audit log entry recorded.`
+    };
+  } catch (error) {
+    logger.error('sendCrmEmailTool error:', error);
+
+    // Record failed attempt in audit log
+    if (adminId && AdminLog.logAction) {
+      await AdminLog.logAction(
+        adminId,
+        'create',
+        'user',
+        null,
+        {
+          type: 'crm_email_failure',
+          customerEmail,
+          error: error.message
+        },
+        ip || null,
+        userAgent || null
+      ).catch(() => {});
+    }
+
+    return { success: false, error: error.message };
+  }
+};
+
 // ══════════════════════════════════════════════════════════════════
 // 3. DETERMINISTIC INTENT & KEYWORD FALLBACK ENGINE
 // ══════════════════════════════════════════════════════════════════
@@ -539,6 +707,8 @@ const processCustomerFallback = async ({ message, user, userId }) => {
 
   // 1. Order tracking intent
   const orderMatch = text.match(/ord[a-z0-9-]+/i) || text.match(/\b\d{6,}\b/);
+  const emailInText = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const customerEmail = user?.email || (emailInText ? emailInText[0] : null);
   const isOrderQuery =
     text.includes('where is my order') ||
     text.includes('order status') ||
@@ -549,13 +719,13 @@ const processCustomerFallback = async ({ message, user, userId }) => {
 
   if (isOrderQuery) {
     const orderNumber = orderMatch ? orderMatch[0] : null;
-    const result = await getOrderStatusTool({ orderNumber, userId, email: user?.email });
+    const result = await getOrderStatusTool({ orderNumber, userId, email: customerEmail });
 
     if (result.success && result.order) {
       const o = result.order;
       return {
         reply: `Here are the latest details for **Order #${o.orderNumber}**.\n\n` +
-          `• **Status:** ${o.status.toUpperCase()}\n` +
+          `• **Status:** ${o.status.toUpperCase()}${o.isCancelled ? ' (Cancelled)' : ''}\n` +
           `• **Courier:** ${o.courier}\n` +
           (o.trackingNumber ? `• **Tracking ID:** \`${o.trackingNumber}\`\n` : '') +
           `• **Total Items:** ${o.itemCount} items (₹${o.total.toLocaleString('en-IN')})\n` +
@@ -628,7 +798,35 @@ const processCustomerFallback = async ({ message, user, userId }) => {
     maxPrice = Number(underPriceMatch[1].replace(/,/g, ''));
   }
 
-  // Clean query for search
+  // 4. Pure Friendly Greeting Check (BEFORE catalog search to prevent matching random words)
+  const isPureGreeting =
+    /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|howdy|namaste|sup|yo|who are you|what can you do)\b/i.test(text.trim()) &&
+    !category &&
+    !underPriceMatch &&
+    !text.includes('buy') &&
+    !text.includes('order') &&
+    !text.includes('track') &&
+    !text.includes('deal') &&
+    !text.includes('discount') &&
+    !text.includes('offer');
+
+  if (isPureGreeting || text === '') {
+    const featuredResult = await searchCatalogTool({ featuredOnly: true, limit: 3 });
+    return {
+      reply: `Hello${user?.name ? ' ' + user.name.split(' ')[0] : ''}! 👋 I'm your **E-Shop AI Shopping Assistant**.\n\n` +
+        `I can help you discover items, track orders in real time, compare specifications, and answer questions about store policies.\n\n` +
+        `Here are some popular options you might like today:`,
+      products: featuredResult.products || [],
+      suggestions: [
+        'Find running shoes under ₹2,000',
+        'Where is my order?',
+        'Best deals today',
+        'What is your return policy?'
+      ]
+    };
+  }
+
+  // 5. Product Search & Discovery
   const cleanKeywords = text
     .replace(/(?:find|show|me|best|under|below|less than|within|deals|today|please|search|for|i need|a|an|the|₹|rs\.?|inr|\d+[\d,]*)/gi, ' ')
     .trim();
@@ -665,23 +863,6 @@ const processCustomerFallback = async ({ message, user, userId }) => {
     };
   }
 
-  // Friendly greetings or general inquiry
-  if (text.includes('hi') || text.includes('hello') || text.includes('hey') || text.includes('assist') || text === '') {
-    const featuredResult = await searchCatalogTool({ featuredOnly: true, limit: 3 });
-    return {
-      reply: `Hello${user?.name ? ' ' + user.name.split(' ')[0] : ''}! 👋 I'm your **E-Shop AI Shopping Assistant**.\n\n` +
-        `I can help you discover items, track orders in real time, compare specifications, and answer questions about store policies.\n\n` +
-        `Here are some popular options you might like today:`,
-      products: featuredResult.products || [],
-      suggestions: [
-        'Find running shoes under ₹2,000',
-        'Where is my order?',
-        'Best deals today',
-        'What is your return policy?'
-      ]
-    };
-  }
-
   // Fallback broad search
   const broadResult = await searchCatalogTool({ limit: 4 });
   return {
@@ -698,9 +879,10 @@ const processCustomerFallback = async ({ message, user, userId }) => {
 /**
  * Fallback intent classifier for Admin Copilot when Gemini API key is absent.
  */
-const processAdminFallback = async ({ message }) => {
+const processAdminFallback = async ({ message, adminUser, adminId }) => {
   const text = (message || '').trim().toLowerCase();
 
+  // 1. KPI & Sales Dashboard
   if (text.includes('kpi') || text.includes('revenue') || text.includes('sale') || text.includes('stat') || text.includes('performance') || text.includes('dashboard')) {
     const statsResult = await getStoreStatsTool();
     const k = statsResult.kpis;
@@ -718,6 +900,7 @@ const processAdminFallback = async ({ message }) => {
     };
   }
 
+  // 2. Stock Depletion & Inventory Alerts
   if (text.includes('stock') || text.includes('inventory') || text.includes('alert') || text.includes('out of stock')) {
     const alerts = await getInventoryAlertsTool({ threshold: 5 });
     return {
@@ -731,18 +914,20 @@ const processAdminFallback = async ({ message }) => {
     };
   }
 
+  // 3. Customer Churn Risk Analysis
   if (text.includes('churn') || text.includes('risk') || text.includes('customer retention') || text.includes('leaving')) {
     const churn = await getChurnRiskTool();
     return {
       reply: `### 📉 Customer Churn Risk Analysis\n\n` +
         `Evaluated **${churn.totalEvaluated}** active customer accounts against ML churn factors.\n` +
         `• **High Churn Risk:** ${churn.highRiskCount} accounts detected.\n\n` +
-        `Key risk indicators include prolonged inactivity (>60 days since last purchase) and low engagement score. Consider sending retention promotional vouchers to re-engage these accounts.`,
+        `Key risk indicators include prolonged inactivity (>60 days since last purchase) and low engagement score. You can compose and dispatch re-engagement promotional emails directly through this copilot.`,
       churnData: churn.highRiskUsers,
-      suggestions: ['Store KPIs', 'Inventory alerts', 'Recent admin logs']
+      suggestions: ['Draft deal email to customer', 'Store KPIs', 'Inventory alerts', 'Recent admin logs']
     };
   }
 
+  // 4. Admin Audit Trail
   if (text.includes('log') || text.includes('audit') || text.includes('action') || text.includes('history')) {
     const logsResult = await getRecentAuditLogsTool({ limit: 5 });
     return {
@@ -753,20 +938,75 @@ const processAdminFallback = async ({ message }) => {
     };
   }
 
+  // 5. CRM Email outreach intent
+  const isEmailIntent =
+    text.includes('email') ||
+    text.includes('mail') ||
+    text.includes('send deal') ||
+    text.includes('send offer') ||
+    text.includes('send promo') ||
+    text.includes('crm') ||
+    text.includes('outreach') ||
+    text.includes('voucher to');
+
+  if (isEmailIntent) {
+    const emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const customerEmail = emailMatch ? emailMatch[0] : null;
+
+    // Detect discount percent
+    const discountMatch = message.match(/(\d+)\s*%/);
+    const discountPercent = discountMatch ? Number(discountMatch[1]) : null;
+
+    // Detect promo/deal code
+    const codeMatch = message.match(/(?:code|coupon|voucher)\s*[:=]?\s*([a-zA-Z0-9_-]{3,15})/i);
+    const dealCode = codeMatch ? codeMatch[1].toUpperCase() : (discountPercent ? `SAVE${discountPercent}` : 'SPECIALDEAL');
+
+    // Detect customer name if no email provided
+    let customerName = null;
+    const nameMatch = message.match(/(?:to customer|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+    if (nameMatch && !customerEmail) {
+      customerName = nameMatch[1];
+    }
+
+    const draftResult = await draftCrmEmailTool({
+      customerEmail: customerEmail || (customerName ? undefined : 'customer@example.com'),
+      customerName,
+      subject: `Exclusive Deal for You: ${discountPercent ? `${discountPercent}% OFF with ` : ''}Code ${dealCode}!`,
+      message: `We appreciate your support with E-Shop! As a valued shopper, here is an exclusive promotional offer just for you.\n\nUse your personalized deal code during checkout to enjoy savings on your next order.`,
+      dealCode,
+      discountPercent
+    });
+
+    if (draftResult.success) {
+      return {
+        reply: `### ✉️ CRM Promotional Email Draft Prepared\n\n` +
+          `I have composed a personalized promotional deal email for **${draftResult.draft.customerName}** (\`${draftResult.draft.customerEmail}\`).\n\n` +
+          `• **Subject:** ${draftResult.draft.subject}\n` +
+          `• **Voucher Code:** \`${draftResult.draft.dealCode}\`${draftResult.draft.discountPercent ? ` (${draftResult.draft.discountPercent}% OFF)` : ''}\n\n` +
+          `⚠️ **Human Confirmation Required:** Per E-Shop security governance, state-modifying actions require explicit authorization. Review the interactive draft card below and click **"Confirm & Send Email"** to dispatch.`,
+        emailDraft: draftResult.draft,
+        suggestions: ['Store KPIs', 'High churn risk accounts', 'Recent admin audit logs']
+      };
+    }
+  }
+
   // Admin Welcome default
   const stats = (await getStoreStatsTool()).kpis;
+  const adminNameGreeting = adminUser?.name ? ' ' + adminUser.name.split(' ')[0] : 'Administrator';
+
   return {
-    reply: `👋 Welcome to the **Admin Operations Copilot**.\n\n` +
+    reply: `👋 Welcome to the **Admin Operations Copilot**, ${adminNameGreeting}.\n\n` +
       `Store operations overview:\n` +
       `• Gross Sales: **${stats.formattedSales}** across **${stats.totalOrders}** orders\n` +
       `• **${stats.pendingOrders}** pending orders await fulfillment\n` +
       `• **${stats.lowStockCount}** products currently flag low-stock warnings\n\n` +
-      `Select an action below or ask any business intelligence question in natural language.`,
+      `You can check metrics or ask me to prepare and dispatch targeted CRM promotional emails to customers.`,
     kpis: stats,
     suggestions: [
       'Show store performance KPIs',
       'Show inventory depletion alerts',
       'Show customers with high churn risk',
+      'Draft deal email to customer',
       'Show recent admin audit logs'
     ]
   };
@@ -798,10 +1038,10 @@ const executeGeminiWithTools = async ({
   const safeHistory = Array.isArray(conversationHistory) ? conversationHistory.slice(-6) : [];
 
   for (const h of safeHistory) {
-    if (h.role && h.content) {
+    if (h.content && typeof h.content === 'string') {
       contents.push({
         role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(h.content) }]
+        parts: [{ text: h.content }]
       });
     }
   }
@@ -811,90 +1051,81 @@ const executeGeminiWithTools = async ({
     parts: [{ text: userMessage }]
   });
 
-  const requestPayload = {
+  const requestBody = {
     contents,
     systemInstruction: {
       parts: [{ text: systemPrompt }]
     },
-    tools: [
-      {
-        functionDeclarations: toolsDefinitions
-      }
-    ],
     generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 1024
+      temperature: 0.1,
+      maxOutputTokens: 800
     }
   };
 
-  const response = await axios.post(endpoint, requestPayload, {
-    timeout: 10000,
-    headers: { 'Content-Type': 'application/json' }
+  if (toolsDefinitions && toolsDefinitions.length > 0) {
+    requestBody.tools = [
+      {
+        functionDeclarations: toolsDefinitions
+      }
+    ];
+  }
+
+  // Turn 1: Initial user query to Gemini
+  const response = await axios.post(endpoint, requestBody, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 10000
   });
 
   const candidate = response.data?.candidates?.[0];
   const functionCallPart = candidate?.content?.parts?.find((p) => p.functionCall);
 
-  if (functionCallPart && functionCallPart.functionCall) {
-    const { name, args } = functionCallPart.functionCall;
-    logger.info(`[Gemini Tool Call] Invoking tool: ${name} with args:`, args);
-
-    const toolResult = await toolExecutor(name, args || {});
-
-    // Follow-up request with function response
-    const followUpContents = [
-      ...contents,
-      candidate.content,
-      {
-        role: 'user',
-        parts: [
-          {
-            functionResponse: {
-              name,
-              response: { result: toolResult.data }
-            }
-          }
-        ]
-      }
-    ];
-
-    const followUpResponse = await axios.post(
-      endpoint,
-      {
-        contents: followUpContents,
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1024
-        }
-      },
-      { timeout: 10000 }
-    );
-
-    const finalAnswer =
-      followUpResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      'I have retrieved the requested information from the database.';
-
-    return {
-      text: finalAnswer,
-      toolData: toolResult
-    };
+  if (!functionCallPart || !toolExecutor) {
+    const textPart = candidate?.content?.parts?.find((p) => p.text);
+    return { text: textPart?.text || 'I have analyzed your request based on current store records.' };
   }
 
-  const directAnswer = candidate?.content?.parts?.[0]?.text || 'How can I assist you with E-Shop today?';
-  return {
-    text: directAnswer,
-    toolData: null
-  };
+  // Turn 2: Grounded Function Execution
+  const toolName = functionCallPart.functionCall.name;
+  const toolArgs = functionCallPart.functionCall.args || {};
+  logger.info(`AI Chat executing grounded tool: ${toolName}`);
+
+  const toolOutput = await toolExecutor(toolName, toolArgs);
+
+  // Turn 3: Send function execution result back to Gemini for grounded synthesis
+  contents.push({
+    role: 'model',
+    parts: [{ functionCall: functionCallPart.functionCall }]
+  });
+
+  contents.push({
+    role: 'user',
+    parts: [
+      {
+        functionResponse: {
+          name: toolName,
+          response: toolOutput
+        }
+      }
+    ]
+  });
+
+  const followUpResponse = await axios.post(endpoint, requestBody, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 10000
+  });
+
+  const finalCandidate = followUpResponse.data?.candidates?.[0];
+  const finalReply = finalCandidate?.content?.parts?.find((p) => p.text)?.text ||
+    'Here are the verified records from the E-Shop live store database:';
+
+  return { text: finalReply, toolData: toolOutput };
 };
 
-// Tool specifications for Gemini
+// Tool declarations for Gemini
 const customerToolDeclarations = [
   {
     name: 'search_catalog',
-    description: 'Searches the E-Shop product catalog using filters like keyword, category, price bounds, brand, and stock status.',
+    description: 'Searches the live catalog for verified products matching category, budget, keyword or brand.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -959,6 +1190,22 @@ const adminToolDeclarations = [
       properties: {
         limit: { type: 'NUMBER', description: 'Number of logs to retrieve (default 5)' }
       }
+    }
+  },
+  {
+    name: 'draft_crm_email',
+    description: 'Composes a targeted CRM email draft to a customer with promotional deals, discounts, or voucher codes. Requires customerEmail or customerName and promotional content.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        customerEmail: { type: 'STRING', description: 'Customer email address (e.g. customer@example.com)' },
+        customerName: { type: 'STRING', description: 'Customer name' },
+        subject: { type: 'STRING', description: 'Email subject line' },
+        message: { type: 'STRING', description: 'Promotional message body detailing the offer or deal' },
+        dealCode: { type: 'STRING', description: 'Voucher or promo code (e.g. SAVE20, DIWALI25)' },
+        discountPercent: { type: 'NUMBER', description: 'Discount percentage (e.g. 20, 25)' }
+      },
+      required: ['message']
     }
   }
 ];
@@ -1039,16 +1286,18 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
     try {
       const systemPrompt =
         'You are the Executive Operations Copilot for E-Shop Store Administrators.\n' +
-        'You provide instant business intelligence on revenue KPIs, inventory depletion, customer churn risk, and audit logs.\n' +
+        'You provide instant business intelligence on revenue KPIs, inventory depletion, customer churn risk, audit logs, and targeted CRM outreach.\n' +
         'CRITICAL RULES:\n' +
         '1. Only report metrics retrieved from the database tools.\n' +
         '2. Present numbers with Indian currency notation (₹) and clear bullet points.\n' +
-        '3. Maintain a professional, executive tone.';
+        '3. When the administrator asks to send an email, offer, or deal to a customer, use the draft_crm_email tool to compose an interactive draft.\n' +
+        '4. Maintain a professional, executive tone.';
 
       let collectedKpis = null;
       let collectedAlerts = [];
       let collectedChurn = [];
       let collectedLogs = [];
+      let collectedEmailDraft = null;
 
       const toolExecutor = async (toolName, toolArgs) => {
         if (toolName === 'get_store_stats') {
@@ -1071,6 +1320,11 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
           collectedLogs = res.logs || [];
           return { data: res };
         }
+        if (toolName === 'draft_crm_email') {
+          const res = await draftCrmEmailTool(toolArgs);
+          collectedEmailDraft = res.draft || null;
+          return { data: res };
+        }
         return { data: { success: false, message: 'Unknown tool' } };
       };
 
@@ -1088,7 +1342,8 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
         alerts: collectedAlerts,
         churnData: collectedChurn,
         logs: collectedLogs,
-        suggestions: ['Store KPIs', 'Inventory alerts', 'Churn risk analysis', 'Audit logs']
+        emailDraft: collectedEmailDraft,
+        suggestions: ['Store KPIs', 'Inventory alerts', 'Churn risk analysis', 'Draft deal email to customer', 'Audit logs']
       };
     } catch (llmErr) {
       logger.warn('Gemini Admin Copilot call failed, using deterministic fallback engine:', llmErr.message);
@@ -1109,6 +1364,8 @@ module.exports = {
   getInventoryAlertsTool,
   getChurnRiskTool,
   getRecentAuditLogsTool,
+  draftCrmEmailTool,
+  sendCrmEmailTool,
   // Main dispatchers
   processCustomerMessage,
   processAdminMessage

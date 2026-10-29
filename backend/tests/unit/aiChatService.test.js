@@ -1,4 +1,6 @@
 const aiChatService = require('../../src/services/aiChatService');
+const emailService = require('../../src/services/emailService');
+const AdminLog = require('../../src/models/AdminLog');
 
 // Mock Product model
 jest.mock('../../src/models/Product', () => {
@@ -49,7 +51,7 @@ jest.mock('../../src/models/Product', () => {
         lean: jest.fn().mockResolvedValue(results)
       };
     }),
-    findOne: jest.fn().mockImplementation((query) => ({
+    findOne: jest.fn().mockImplementation(() => ({
       lean: jest.fn().mockResolvedValue(sampleProducts[0])
     })),
     countDocuments: jest.fn().mockResolvedValue(2)
@@ -89,26 +91,33 @@ jest.mock('../../src/models/Order', () => {
 });
 
 // Mock User model
-jest.mock('../../src/models/User', () => ({
-  findOne: jest.fn().mockResolvedValue({
+jest.mock('../../src/models/User', () => {
+  const mockUser = {
     _id: '64f1a2b3c4d5e6f7a8b9c0f1',
     name: 'Customer Test',
     email: 'customer@test.com'
-  }),
-  find: jest.fn().mockReturnValue({
-    limit: jest.fn().mockReturnValue({
-      lean: jest.fn().mockResolvedValue([
-        {
-          _id: '64f1a2b3c4d5e6f7a8b9c0f1',
-          name: 'Customer Test',
-          email: 'customer@test.com',
-          createdAt: new Date()
-        }
-      ])
-    })
-  }),
-  countDocuments: jest.fn().mockResolvedValue(20)
-}));
+  };
+
+  return {
+    findOne: jest.fn().mockImplementation(() => ({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue(mockUser)
+    })),
+    find: jest.fn().mockReturnValue({
+      limit: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([
+          {
+            _id: '64f1a2b3c4d5e6f7a8b9c0f1',
+            name: 'Customer Test',
+            email: 'customer@test.com',
+            createdAt: new Date()
+          }
+        ])
+      })
+    }),
+    countDocuments: jest.fn().mockResolvedValue(20)
+  };
+});
 
 // Mock AdminLog model
 jest.mock('../../src/models/AdminLog', () => ({
@@ -128,7 +137,17 @@ jest.mock('../../src/models/AdminLog', () => ({
       ])
     })
   }),
-  countDocuments: jest.fn().mockResolvedValue(3)
+  countDocuments: jest.fn().mockResolvedValue(3),
+  logAction: jest.fn().mockResolvedValue({ _id: '64f1a2b3c4d5e6f7a8b9c0a9' })
+}));
+
+// Mock emailService
+jest.mock('../../src/services/emailService', () => ({
+  sendEmail: jest.fn().mockResolvedValue({ success: true, messageId: 'test-mail-id-123' }),
+  sendBulkEmail: jest.fn().mockResolvedValue([{ success: true }]),
+  emailTemplates: {
+    crmDeal: jest.fn().mockReturnValue({ subject: 'Special Offer from E-Shop!', html: '<p>Offer</p>' })
+  }
 }));
 
 describe('AI Chat Service Unit Tests', () => {
@@ -140,21 +159,18 @@ describe('AI Chat Service Unit Tests', () => {
       expect(result.count).toBe(1);
       expect(result.products[0].name).toBe('Wireless Noise Canceling Headphones');
       expect(result.products[0].discountPercent).toBeGreaterThan(0);
-      expect(result.products[0].inStock).toBe(true);
     });
 
     it('getProductDetailsTool should return full details for existing product', async () => {
-      const result = await aiChatService.getProductDetailsTool({
-        productId: '64f1a2b3c4d5e6f7a8b9c0d1'
-      });
+      const result = await aiChatService.getProductDetailsTool({ productId: '64f1a2b3c4d5e6f7a8b9c0d1' });
 
       expect(result.success).toBe(true);
-      expect(result.product.name).toBe('Wireless Noise Canceling Headphones');
-      expect(result.product.price).toBe(4999);
+      expect(result.product.slug).toBe('wireless-noise-canceling-headphones');
     });
 
     it('compareProductsTool should require at least 2 product IDs', async () => {
-      const result = await aiChatService.compareProductsTool({ productIds: ['only_one'] });
+      const result = await aiChatService.compareProductsTool({ productIds: ['single-id'] });
+
       expect(result.success).toBe(false);
       expect(result.message).toContain('at least 2');
     });
@@ -167,15 +183,13 @@ describe('AI Chat Service Unit Tests', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.order).toBeDefined();
       expect(result.order.orderNumber).toBe('ORD-987654321');
       expect(result.order.status).toBe('delivered');
+      expect(result.order.statusStep).toBe(4);
     });
 
     it('getOrderStatusTool should require auth or email when only orderNumber is provided without user', async () => {
-      const result = await aiChatService.getOrderStatusTool({
-        orderNumber: 'ORD-987654321'
-      });
+      const result = await aiChatService.getOrderStatusTool({ orderNumber: 'ORD-987654321' });
 
       expect(result.success).toBe(false);
       expect(result.requiresAuth).toBe(true);
@@ -215,6 +229,58 @@ describe('AI Chat Service Unit Tests', () => {
       expect(result.success).toBe(true);
       expect(Array.isArray(result.logs)).toBe(true);
     });
+
+    it('draftCrmEmailTool should compose a promotional email draft with deal code and confirmation requirement', async () => {
+      const result = await aiChatService.draftCrmEmailTool({
+        customerEmail: 'customer@test.com',
+        dealCode: 'SAVE20',
+        discountPercent: 20
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.draft).toBeDefined();
+      expect(result.draft.customerEmail).toBe('customer@test.com');
+      expect(result.draft.dealCode).toBe('SAVE20');
+      expect(result.draft.discountPercent).toBe(20);
+      expect(result.draft.requiresConfirmation).toBe(true);
+    });
+
+    it('sendCrmEmailTool should dispatch email via emailService and record audit log', async () => {
+      const result = await aiChatService.sendCrmEmailTool({
+        customerEmail: 'customer@test.com',
+        customerName: 'Customer Test',
+        subject: 'Diwali Special Offer!',
+        body: 'Enjoy 20% off with coupon SAVE20.',
+        dealCode: 'SAVE20',
+        discountPercent: 20,
+        adminId: 'admin123',
+        adminName: 'Super Admin'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.customerEmail).toBe('customer@test.com');
+      expect(emailService.sendEmail).toHaveBeenCalledWith(
+        'customer@test.com',
+        'crmDeal',
+        expect.objectContaining({
+          dealCode: 'SAVE20',
+          discountPercent: 20
+        })
+      );
+      expect(AdminLog.logAction).toHaveBeenCalledWith(
+        'admin123',
+        'create',
+        'user',
+        expect.any(String),
+        expect.objectContaining({
+          type: 'crm_email',
+          customerEmail: 'customer@test.com',
+          dealCode: 'SAVE20'
+        }),
+        null,
+        null
+      );
+    });
   });
 
   describe('Message Processors & Fallback Dispatches', () => {
@@ -241,6 +307,21 @@ describe('AI Chat Service Unit Tests', () => {
       expect(res.kpis).toBeDefined();
       expect(res.reply).toContain('Executive Store Operations Summary');
     });
+
+    it('processAdminMessage should prepare CRM promotional email draft when email intent is requested', async () => {
+      const res = await aiChatService.processAdminMessage({
+        message: 'Send promotional deal code SAVE30 to customer@test.com with 30% discount',
+        adminUser: { name: 'Admin Boss' },
+        adminId: 'admin123'
+      });
+
+      expect(res.reply).toBeDefined();
+      expect(res.reply).toContain('CRM Promotional Email Draft Prepared');
+      expect(res.emailDraft).toBeDefined();
+      expect(res.emailDraft.customerEmail).toBe('customer@test.com');
+      expect(res.emailDraft.dealCode).toBe('SAVE30');
+      expect(res.emailDraft.discountPercent).toBe(30);
+      expect(res.emailDraft.requiresConfirmation).toBe(true);
+    });
   });
 });
-

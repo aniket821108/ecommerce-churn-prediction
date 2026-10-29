@@ -96,7 +96,62 @@ exports.handleAdminChat = catchAsync(async (req, res) => {
     alerts: response.alerts || [],
     churnData: response.churnData || [],
     logs: response.logs || [],
+    emailDraft: response.emailDraft || null,
     suggestions: response.suggestions || []
   });
 });
 
+/**
+ * Handle Admin Confirmed CRM Promotional Email Dispatch
+ * Route: POST /api/chat/admin/send-email
+ * Access: Private (Admin Only)
+ */
+exports.handleAdminSendEmail = catchAsync(async (req, res) => {
+  const { customerEmail, customerName, subject, body, dealCode, discountPercent } = req.body;
+
+  if (!customerEmail || typeof customerEmail !== 'string' || !customerEmail.includes('@')) {
+    return res.status(400).json({
+      success: false,
+      message: 'A valid customer email address is required.'
+    });
+  }
+
+  if (!body || typeof body !== 'string' || !body.trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Email body content is required.'
+    });
+  }
+
+  const cleanEmail = sanitizeInput(customerEmail.trim());
+  const cleanSubject = subject ? sanitizeInput(subject.trim()) : 'Special Offer from E-Shop! 🎉';
+  const cleanBody = sanitizeInput(body.trim());
+  const cleanCode = dealCode ? sanitizeInput(dealCode.trim()) : null;
+
+  const result = await aiChatService.sendCrmEmailTool({
+    customerEmail: cleanEmail,
+    customerName: customerName ? sanitizeInput(customerName) : undefined,
+    subject: cleanSubject,
+    body: cleanBody,
+    dealCode: cleanCode,
+    discountPercent: discountPercent ? Number(discountPercent) : undefined,
+    adminId: req.userId,
+    adminName: req.user?.name || 'Administrator',
+    ip: req.ip,
+    userAgent: req.headers['user-agent']
+  });
+
+  if (!result.success) {
+    return res.status(500).json({
+      success: false,
+      message: result.error || 'Failed to dispatch email.'
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: result.message,
+    logId: result.logId,
+    customerEmail: result.customerEmail
+  });
+});
