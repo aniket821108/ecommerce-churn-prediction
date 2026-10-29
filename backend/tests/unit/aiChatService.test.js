@@ -1,5 +1,6 @@
 const aiChatService = require('../../src/services/aiChatService');
 const emailService = require('../../src/services/emailService');
+const whatsappService = require('../../src/services/whatsappService');
 const AdminLog = require('../../src/models/AdminLog');
 
 // Mock Product model
@@ -95,7 +96,8 @@ jest.mock('../../src/models/User', () => {
   const mockUser = {
     _id: '64f1a2b3c4d5e6f7a8b9c0f1',
     name: 'Customer Test',
-    email: 'customer@test.com'
+    email: 'customer@test.com',
+    phone: '9876543210'
   };
 
   return {
@@ -110,6 +112,7 @@ jest.mock('../../src/models/User', () => {
             _id: '64f1a2b3c4d5e6f7a8b9c0f1',
             name: 'Customer Test',
             email: 'customer@test.com',
+            phone: '9876543210',
             createdAt: new Date()
           }
         ])
@@ -148,6 +151,22 @@ jest.mock('../../src/services/emailService', () => ({
   emailTemplates: {
     crmDeal: jest.fn().mockReturnValue({ subject: 'Special Offer from E-Shop!', html: '<p>Offer</p>' })
   }
+}));
+
+// Mock whatsappService
+jest.mock('../../src/services/whatsappService', () => ({
+  whatsappTemplates: {
+    crmDeal: jest.fn().mockReturnValue('🎉 Exclusive Deal from E-Shop!\n\nUse code WA20 for 20% OFF!')
+  },
+  formatWhatsappNumber: jest.fn().mockImplementation((p) => `91${(p || '').toString().replace(/\D/g, '').slice(-10)}`),
+  generateWaLink: jest.fn().mockReturnValue('https://wa.me/919876543210?text=Special%20Deal'),
+  sendWhatsappMessage: jest.fn().mockResolvedValue({
+    success: true,
+    messageId: 'wa-mock-id-789',
+    recipientPhone: '919876543210',
+    waLink: 'https://wa.me/919876543210?text=Special%20Deal',
+    mode: 'web_link'
+  })
 }));
 
 describe('AI Chat Service Unit Tests', () => {
@@ -281,6 +300,55 @@ describe('AI Chat Service Unit Tests', () => {
         null
       );
     });
+
+    it('draftWhatsappDealTool should compose a WhatsApp deal draft with direct link', async () => {
+      const result = await aiChatService.draftWhatsappDealTool({
+        customerPhone: '9876543210',
+        dealCode: 'WA25',
+        discountPercent: 25
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.draft).toBeDefined();
+      expect(result.draft.customerPhone).toBe('9876543210');
+      expect(result.draft.dealCode).toBe('WA25');
+      expect(result.draft.discountPercent).toBe(25);
+      expect(result.draft.waLink).toBeDefined();
+      expect(result.draft.requiresConfirmation).toBe(true);
+    });
+
+    it('sendWhatsappDealTool should dispatch WhatsApp deal via whatsappService and record audit log', async () => {
+      const result = await aiChatService.sendWhatsappDealTool({
+        customerPhone: '9876543210',
+        customerName: 'Customer Test',
+        message: 'Enjoy 25% off with code WA25.',
+        dealCode: 'WA25',
+        discountPercent: 25,
+        adminId: 'admin123',
+        adminName: 'Super Admin'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.customerPhone).toBe('919876543210');
+      expect(whatsappService.sendWhatsappMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '9876543210',
+          templateName: 'crmDeal'
+        })
+      );
+      expect(AdminLog.logAction).toHaveBeenCalledWith(
+        'admin123',
+        'create',
+        'user',
+        expect.any(String),
+        expect.objectContaining({
+          type: 'crm_whatsapp',
+          dealCode: 'WA25'
+        }),
+        null,
+        null
+      );
+    });
   });
 
   describe('Message Processors & Fallback Dispatches', () => {
@@ -322,6 +390,22 @@ describe('AI Chat Service Unit Tests', () => {
       expect(res.emailDraft.dealCode).toBe('SAVE30');
       expect(res.emailDraft.discountPercent).toBe(30);
       expect(res.emailDraft.requiresConfirmation).toBe(true);
+    });
+
+    it('processAdminMessage should prepare CRM WhatsApp deal draft when WhatsApp intent is requested', async () => {
+      const res = await aiChatService.processAdminMessage({
+        message: 'Send WhatsApp deal code WA40 to customer 9876543210 with 40% discount',
+        adminUser: { name: 'Admin Boss' },
+        adminId: 'admin123'
+      });
+
+      expect(res.reply).toBeDefined();
+      expect(res.reply).toContain('WhatsApp Promotional Deal Draft Prepared');
+      expect(res.whatsappDraft).toBeDefined();
+      expect(res.whatsappDraft.customerPhone).toBe('9876543210');
+      expect(res.whatsappDraft.dealCode).toBe('WA40');
+      expect(res.whatsappDraft.discountPercent).toBe(40);
+      expect(res.whatsappDraft.requiresConfirmation).toBe(true);
     });
   });
 });

@@ -7,7 +7,9 @@ import {
   EnvelopeIcon,
   TagIcon,
   CheckCircleIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  ChatBubbleLeftRightIcon,
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import chatService from '../../services/chatService';
@@ -17,6 +19,7 @@ const ADMIN_STARTERS = [
   '📊 Executive KPIs & Sales',
   '⚠️ Inventory Depletion Alerts',
   '📉 High Churn Risk Accounts',
+  '📱 Draft WhatsApp Deal',
   '📧 Draft Deal Email to Customer',
   '📝 Recent Admin Audit Logs'
 ];
@@ -28,7 +31,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
       role: 'assistant',
       content:
         '👋 Welcome to the **Admin Operations Copilot**.\n\n' +
-        'I am your executive AI assistant for store performance, inventory management, customer churn risk analysis, audit tracking, and targeted CRM email outreach.\n\n' +
+        'I am your executive AI assistant for store performance, inventory management, customer churn risk analysis, audit tracking, and targeted CRM email & WhatsApp deal outreach.\n\n' +
         'Select a quick action below or ask any business operations query in natural language.',
       suggestions: ADMIN_STARTERS,
       timestamp: new Date()
@@ -37,6 +40,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sendingEmailId, setSendingEmailId] = useState(null);
+  const [sendingWhatsappId, setSendingWhatsappId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -92,6 +96,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
         churnData: data.churnData || [],
         logs: data.logs || [],
         emailDraft: data.emailDraft || null,
+        whatsappDraft: data.whatsappDraft || null,
         suggestions: data.suggestions?.length ? data.suggestions : ADMIN_STARTERS,
         timestamp: new Date()
       };
@@ -129,7 +134,6 @@ const AdminCopilot = ({ isOpen, onClose }) => {
 
       toast.success(`Promotional email dispatched to ${draft.customerEmail}!`);
 
-      // Update message state to show email as sent
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId
@@ -146,7 +150,6 @@ const AdminCopilot = ({ isOpen, onClose }) => {
         )
       );
 
-      // Append bot confirmation message
       const confirmMsg = {
         id: `admin-sent-${Date.now()}`,
         role: 'assistant',
@@ -168,9 +171,68 @@ const AdminCopilot = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleConfirmSendWhatsapp = async (msgId, draft) => {
+    if (!draft || !draft.customerPhone || sendingWhatsappId) return;
+
+    setSendingWhatsappId(msgId);
+    try {
+      const res = await chatService.sendAdminWhatsapp({
+        customerPhone: draft.customerPhone,
+        customerName: draft.customerName,
+        customerEmail: draft.customerEmail,
+        message: draft.message,
+        dealCode: draft.dealCode,
+        discountPercent: draft.discountPercent
+      });
+
+      toast.success(`WhatsApp deal dispatched to +${draft.customerPhone}!`);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? {
+                ...m,
+                whatsappDraft: {
+                  ...m.whatsappDraft,
+                  sent: true,
+                  sentAt: new Date(),
+                  logId: res.data?.logId
+                }
+              }
+            : m
+        )
+      );
+
+      const confirmMsg = {
+        id: `admin-wa-sent-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ **WhatsApp Deal Outreach Dispatched**\n\n` +
+          `• **Recipient:** ${draft.customerName} (\`+91 ${draft.customerPhone}\`)\n` +
+          (draft.dealCode ? `• **Promo Code:** \`${draft.dealCode}\`\n` : '') +
+          `• **Delivery Mode:** ${res.data?.mode === 'cloud_api' ? 'WhatsApp Business Cloud API' : 'Deep Link Verified'}\n` +
+          `• **Audit Log:** Recorded in AdminLog (Entity: \`user\`, Action: \`create\`) with admin signature.`,
+        suggestions: ADMIN_STARTERS,
+        timestamp: new Date()
+      };
+
+      setMessages((prev) => [...prev, confirmMsg]);
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || 'Failed to dispatch WhatsApp message.';
+      toast.error(errMsg);
+    } finally {
+      setSendingWhatsappId(null);
+    }
+  };
+
   const handleDismissDraft = (msgId) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === msgId ? { ...m, emailDraft: null } : m))
+    );
+  };
+
+  const handleDismissWhatsappDraft = (msgId) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, whatsappDraft: null } : m))
     );
   };
 
@@ -258,7 +320,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                     CRM & BI Guard
                   </span>
                 </h2>
-                <p className="text-[11px] text-slate-400">Executive Intelligence, Outreach & ML</p>
+                <p className="text-[11px] text-slate-400">Intelligence, Email & WhatsApp CRM</p>
               </div>
             </div>
 
@@ -304,13 +366,13 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                     )}
                   </div>
 
-                  {/* CRM Deal Outreach Interactive Draft Card */}
+                  {/* CRM Email Outreach Interactive Draft Card */}
                   {msg.emailDraft && (
                     <div className="mt-2.5 w-full bg-white rounded-xl border border-indigo-200/90 p-3.5 shadow-2xs overflow-hidden">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2.5">
                         <div className="flex items-center gap-1.5">
                           <EnvelopeIcon className="w-4 h-4 text-indigo-600" />
-                          <span className="text-xs font-bold text-slate-900">CRM Deal Outreach</span>
+                          <span className="text-xs font-bold text-slate-900">CRM Email Outreach</span>
                         </div>
                         {msg.emailDraft.sent ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -386,6 +448,101 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                     </div>
                   )}
 
+                  {/* CRM WhatsApp Deal Outreach Interactive Draft Card */}
+                  {msg.whatsappDraft && (
+                    <div className="mt-2.5 w-full bg-white rounded-xl border border-emerald-300/80 p-3.5 shadow-2xs overflow-hidden">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <ChatBubbleLeftRightIcon className="w-4 h-4 text-emerald-600" />
+                          <span className="text-xs font-bold text-slate-900">CRM WhatsApp Deal</span>
+                        </div>
+                        {msg.whatsappDraft.sent ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircleIcon className="w-3 h-3" /> Dispatched & Logged
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            Confirmation Required
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 font-medium">Recipient: </span>
+                          <strong className="text-slate-900">{msg.whatsappDraft.customerName}</strong>{' '}
+                          <span className="text-emerald-700 font-mono text-[10px] font-bold">(+91 {msg.whatsappDraft.customerPhone})</span>
+                        </div>
+
+                        {msg.whatsappDraft.dealCode && (
+                          <div className="flex items-center gap-2 bg-emerald-50/80 border border-emerald-200 rounded-lg p-2">
+                            <TagIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <div className="flex-1">
+                              <span className="text-[10px] uppercase font-bold text-emerald-900 tracking-wider">Voucher Code: </span>
+                              <span className="font-mono font-extrabold text-emerald-700 text-xs">{msg.whatsappDraft.dealCode}</span>
+                              {msg.whatsappDraft.discountPercent && (
+                                <span className="ml-2 text-[10px] text-emerald-600 font-semibold">({msg.whatsappDraft.discountPercent}% OFF)</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="bg-emerald-50/40 rounded-lg p-2.5 border border-emerald-100 text-[11px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+                          {msg.whatsappDraft.message}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                        {msg.whatsappDraft.waLink && (
+                          <a
+                            href={msg.whatsappDraft.waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1"
+                          >
+                            <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                            <span>Open in WhatsApp Web</span>
+                          </a>
+                        )}
+
+                        {!msg.whatsappDraft.sent ? (
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleDismissWhatsappDraft(msg.id)}
+                              disabled={sendingWhatsappId === msg.id}
+                              className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                            >
+                              Dismiss
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmSendWhatsapp(msg.id, msg.whatsappDraft)}
+                              disabled={sendingWhatsappId === msg.id}
+                              className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:bg-slate-300 rounded-lg shadow-xs flex items-center gap-1.5 transition-all"
+                            >
+                              {sendingWhatsappId === msg.id ? (
+                                <>
+                                  <ArrowPathIcon className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Dispatching...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PaperAirplaneIcon className="w-3.5 h-3.5" />
+                                  <span>Confirm & Send</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="ml-auto text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                            <CheckCircleIcon className="w-3.5 h-3.5" /> Sent & Tracked
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Structured KPIs Grid */}
                   {msg.kpis && (
                     <div className="mt-2.5 w-full grid grid-cols-2 gap-2">
@@ -458,7 +615,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                     </div>
                   )}
 
-                  {/* Churn Risk Breakdown */}
+                  {/* Churn Risk Breakdown with Omni-Channel Retention Buttons */}
                   {msg.churnData && msg.churnData.length > 0 && (
                     <div className="mt-2.5 w-full bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
                       <div className="text-xs font-bold text-slate-900 mb-2 flex items-center justify-between">
@@ -481,14 +638,25 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                             </div>
                             <p className="text-[10px] text-slate-500">{cust.email}</p>
                             <p className="text-[10px] text-slate-600 mt-1 italic">"{cust.reason}"</p>
-                            <button
-                              type="button"
-                              onClick={() => handleSendMessage(`Draft promotional deal email to ${cust.email} offering code SAVE20 with 20% discount`)}
-                              className="mt-2 w-full py-1 text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-indigo-200/50"
-                            >
-                              <EnvelopeIcon className="w-3 h-3" />
-                              <span>Draft CRM Retention Deal</span>
-                            </button>
+                            
+                            <div className="mt-2 grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSendMessage(`Draft promotional deal email to ${cust.email} offering code SAVE20 with 20% discount`)}
+                                className="py-1 text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-indigo-200/50"
+                              >
+                                <EnvelopeIcon className="w-3 h-3" />
+                                <span>Email Deal</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSendMessage(`Draft WhatsApp deal to ${cust.name} offering code SAVE20 with 20% discount`)}
+                                className="py-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50/80 hover:bg-emerald-100 rounded-md transition-colors flex items-center justify-center gap-1 border border-emerald-200/50"
+                              >
+                                <ChatBubbleLeftRightIcon className="w-3 h-3" />
+                                <span>WhatsApp Deal</span>
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -569,7 +737,7 @@ const AdminCopilot = ({ isOpen, onClose }) => {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about KPIs, low stock, or send deal email to customer..."
+                placeholder="Ask KPIs, low stock, or send email/WhatsApp deal..."
                 disabled={loading}
                 className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-slate-800 focus:bg-white text-slate-800 placeholder-slate-400 transition-all"
               />

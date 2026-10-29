@@ -135,6 +135,7 @@
 | `POST` | `/api/chat/customer` | Public / Optional Auth | Storefront conversational shopping concierge. Grounded catalog search, order tracking, and store policies. | `{ "message": "Find running shoes under ₹2,000", "conversationHistory": [] }` |
 | `POST` | `/api/chat/admin` | Admin Only (`admin`) | Executive operations copilot. Queries gross sales, order KPIs, inventory depletion, ML churn risk, audit logs, and CRM email drafts. | `{ "message": "Show executive KPIs and revenue", "conversationHistory": [] }` |
 | `POST` | `/api/chat/admin/send-email` | Admin Only (`admin`) | Dispatches confirmed CRM promotional/deal email to a targeted customer with strict cryptographic audit logging to `AdminLog`. | `{ "customerEmail": "user@example.com", "customerName": "John", "subject": "Exclusive Deal", "body": "Enjoy special 20% savings", "dealCode": "SAVE20", "discountPercent": 20 }` |
+| `POST` | `/api/chat/admin/send-whatsapp` | Admin Only (`admin`) | Dispatches or generates a click-to-chat CRM promotional/deal WhatsApp message to a targeted customer with WhatsApp Web integration and cryptographic audit logging to `AdminLog`. | `{ "customerPhone": "9876543210", "customerName": "John", "message": "Enjoy 20% off with coupon CODE20", "dealCode": "CODE20", "discountPercent": 20 }` |
 
 ---
 

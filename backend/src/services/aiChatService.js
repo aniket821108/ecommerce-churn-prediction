@@ -4,6 +4,7 @@ const User = require('../models/User');
 const AdminLog = require('../models/AdminLog');
 const logger = require('../utils/logger');
 const emailService = require('./emailService');
+const whatsappService = require('./whatsappService');
 const axios = require('axios');
 
 // ══════════════════════════════════════════════════════════════════
@@ -695,6 +696,178 @@ const sendCrmEmailTool = async ({
 };
 
 // ══════════════════════════════════════════════════════════════════
+/**
+ * Admin Tool 7: Prepare CRM WhatsApp Promotional / Deal Outreach Draft
+ * Resolves customer phone from DB if only name or email is supplied.
+ */
+const draftWhatsappDealTool = async ({
+  customerPhone,
+  customerEmail,
+  customerName,
+  message,
+  dealCode,
+  discountPercent
+}) => {
+  try {
+    if (!customerPhone && !customerEmail && !customerName) {
+      return {
+        success: false,
+        message: 'Please provide a customer phone number, email, or name to compose a WhatsApp deal.'
+      };
+    }
+
+    let user = null;
+    if (customerPhone) {
+      const cleanDigits = customerPhone.toString().replace(/\D/g, '').slice(-10);
+      user = await User.findOne({ phone: cleanDigits }).select('_id name email phone').lean();
+    } else if (customerEmail) {
+      user = await User.findOne({ email: new RegExp(`^${customerEmail.trim()}$`, 'i') }).select('_id name email phone').lean();
+    } else if (customerName) {
+      const escapedName = customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      user = await User.findOne({ name: new RegExp(escapedName, 'i') }).select('_id name email phone').lean();
+    }
+
+    const resolvedPhone = customerPhone || user?.phone || '9876543210';
+    const resolvedName = user?.name || customerName || 'Valued Customer';
+    const resolvedEmail = user?.email || customerEmail || null;
+
+    const formattedCode = dealCode ? dealCode.trim().toUpperCase() : (discountPercent ? `WA${discountPercent}` : 'SPECIALDEAL');
+    const defaultMsg = message ||
+      `We have curated an exclusive promotional offer just for you! Enjoy special savings on top-rated products.`;
+
+    const waText = whatsappService.whatsappTemplates.crmDeal({
+      customerName: resolvedName,
+      message: defaultMsg,
+      dealCode: formattedCode,
+      discountPercent: discountPercent ? Number(discountPercent) : null
+    });
+
+    const waLink = whatsappService.generateWaLink(resolvedPhone, waText);
+
+    const draft = {
+      customerId: user?._id ? user._id.toString() : null,
+      customerPhone: resolvedPhone,
+      customerName: resolvedName,
+      customerEmail: resolvedEmail,
+      message: defaultMsg,
+      dealCode: formattedCode,
+      discountPercent: discountPercent ? Number(discountPercent) : null,
+      waLink,
+      requiresConfirmation: true
+    };
+
+    return {
+      success: true,
+      draft,
+      message: `I have prepared a WhatsApp deal message draft for **${resolvedName}** (Phone: \`+91 ${resolvedPhone}\`). Review the preview below and confirm to dispatch.`
+    };
+  } catch (error) {
+    logger.error('draftWhatsappDealTool error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Admin Tool 8: Dispatch WhatsApp Promotional Deal to Customer with Audit Trail
+ */
+const sendWhatsappDealTool = async ({
+  customerPhone,
+  customerName,
+  customerEmail,
+  message,
+  dealCode,
+  discountPercent,
+  adminId,
+  adminName,
+  ip,
+  userAgent
+}) => {
+  try {
+    if (!customerPhone || !message) {
+      return {
+        success: false,
+        message: 'Customer phone number and message content are required to dispatch WhatsApp outreach.'
+      };
+    }
+
+    const cleanDigits = customerPhone.toString().replace(/\D/g, '').slice(-10);
+    const user = await User.findOne({
+      $or: [
+        { phone: cleanDigits },
+        ...(customerEmail ? [{ email: new RegExp(`^${customerEmail.trim()}$`, 'i') }] : [])
+      ]
+    }).select('_id name email phone').lean();
+
+    const resolvedName = customerName || user?.name || 'Valued Customer';
+
+    // Dispatch via WhatsApp Service
+    const result = await whatsappService.sendWhatsappMessage({
+      phone: customerPhone,
+      templateName: 'crmDeal',
+      data: {
+        customerName: resolvedName,
+        message,
+        dealCode: dealCode ? dealCode.toUpperCase() : null,
+        discountPercent: discountPercent ? Number(discountPercent) : null
+      }
+    });
+
+    // Record strict Administrative Audit Trail
+    let logEntry = null;
+    if (adminId && AdminLog.logAction) {
+      logEntry = await AdminLog.logAction(
+        adminId,
+        'create',
+        'user',
+        user?._id || null,
+        {
+          type: 'crm_whatsapp',
+          customerPhone: result.recipientPhone,
+          customerName: resolvedName,
+          dealCode: dealCode || null,
+          discountPercent: discountPercent || null,
+          messageSnippet: message.slice(0, 160),
+          mode: result.mode,
+          sentByAdmin: adminName || 'Admin'
+        },
+        ip || null,
+        userAgent || null
+      );
+    }
+
+    return {
+      success: true,
+      messageId: result.messageId,
+      logId: logEntry?._id ? logEntry._id.toString() : null,
+      customerPhone: result.recipientPhone,
+      customerName: resolvedName,
+      waLink: result.waLink,
+      mode: result.mode,
+      message: `WhatsApp promotional deal successfully dispatched to **+${result.recipientPhone}**! Audit log entry recorded.`
+    };
+  } catch (error) {
+    logger.error('sendWhatsappDealTool error:', error);
+
+    if (adminId && AdminLog.logAction) {
+      await AdminLog.logAction(
+        adminId,
+        'create',
+        'user',
+        null,
+        {
+          type: 'crm_whatsapp_failure',
+          customerPhone,
+          error: error.message
+        },
+        ip || null,
+        userAgent || null
+      ).catch(() => {});
+    }
+
+    return { success: false, error: error.message };
+  }
+};
+
 // 3. DETERMINISTIC INTENT & KEYWORD FALLBACK ENGINE
 // ══════════════════════════════════════════════════════════════════
 
@@ -938,8 +1111,59 @@ const processAdminFallback = async ({ message, adminUser, adminId }) => {
     };
   }
 
-  // 5. CRM Email outreach intent
-  const isEmailIntent =
+  // 5. CRM WhatsApp outreach intent
+  const isWhatsappIntent =
+    text.includes('whatsapp') ||
+    text.includes('whats app') ||
+    text.includes('wa deal') ||
+    text.includes('wa message') ||
+    text.includes('wa promo') ||
+    text.includes('send wa') ||
+    text.includes('whatsapp to');
+
+  if (isWhatsappIntent) {
+    const phoneMatch = message.match(/(?:\+?91[\-\s]?)?[6-9]\d{9}/);
+    const customerPhone = phoneMatch ? phoneMatch[0].replace(/\D/g, '').slice(-10) : null;
+
+    const emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const customerEmail = emailMatch ? emailMatch[0] : null;
+
+    const discountMatch = message.match(/(\d+)\s*%/);
+    const discountPercent = discountMatch ? Number(discountMatch[1]) : null;
+
+    const codeMatch = message.match(/(?:code|coupon|voucher)\s*[:=]?\s*([a-zA-Z0-9_-]{3,15})/i);
+    const dealCode = codeMatch ? codeMatch[1].toUpperCase() : (discountPercent ? `WA${discountPercent}` : 'WADEAL');
+
+    let customerName = null;
+    const nameMatch = message.match(/(?:to customer|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+    if (nameMatch && !customerEmail && !customerPhone) {
+      customerName = nameMatch[1];
+    }
+
+    const draftResult = await draftWhatsappDealTool({
+      customerPhone: customerPhone || (customerEmail || customerName ? undefined : '9876543210'),
+      customerEmail,
+      customerName,
+      message: `Exclusive festival deal curated specially for you! Enjoy special discounts on trending products.`,
+      dealCode,
+      discountPercent
+    });
+
+    if (draftResult.success) {
+      return {
+        reply: `### 📱 WhatsApp Promotional Deal Draft Prepared\n\n` +
+          `I have composed a personalized WhatsApp promotional deal message for **${draftResult.draft.customerName}** (\`+91 ${draftResult.draft.customerPhone}\`).\n\n` +
+          `• **Voucher Code:** \`${draftResult.draft.dealCode}\`${draftResult.draft.discountPercent ? ` (${draftResult.draft.discountPercent}% OFF)` : ''}\n` +
+          `• **Direct Link:** Pre-generated WhatsApp Web deep link ready.\n\n` +
+          `⚠️ **Human Confirmation Required:** State-modifying actions require explicit authorization. Review the interactive draft card below and click **"Confirm & Dispatch WhatsApp"** or launch directly in WhatsApp Web.`,
+        whatsappDraft: draftResult.draft,
+        suggestions: ['Store KPIs', 'Draft deal email to customer', 'Recent admin audit logs']
+      };
+    }
+  }
+
+  // 6. CRM Email outreach intent
+  const isEmailIntent = !isWhatsappIntent && (
     text.includes('email') ||
     text.includes('mail') ||
     text.includes('send deal') ||
@@ -947,7 +1171,7 @@ const processAdminFallback = async ({ message, adminUser, adminId }) => {
     text.includes('send promo') ||
     text.includes('crm') ||
     text.includes('outreach') ||
-    text.includes('voucher to');
+    text.includes('voucher to'));
 
   if (isEmailIntent) {
     const emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -1193,6 +1417,22 @@ const adminToolDeclarations = [
     }
   },
   {
+    name: 'draft_whatsapp_deal',
+    description: 'Composes a targeted WhatsApp promotional deal message to a customer with voucher codes or discounts. Prepares direct click-to-chat web link and requires confirmation.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        customerPhone: { type: 'STRING', description: 'Customer 10-digit mobile phone number' },
+        customerEmail: { type: 'STRING', description: 'Customer email address (optional for user lookup)' },
+        customerName: { type: 'STRING', description: 'Customer name' },
+        message: { type: 'STRING', description: 'The promotional message copy' },
+        dealCode: { type: 'STRING', description: 'Voucher or promo code (e.g. WA20, DIWALI25)' },
+        discountPercent: { type: 'NUMBER', description: 'Discount percentage (e.g. 20, 25)' }
+      },
+      required: ['message']
+    }
+  },
+  {
     name: 'draft_crm_email',
     description: 'Composes a targeted CRM email draft to a customer with promotional deals, discounts, or voucher codes. Requires customerEmail or customerName and promotional content.',
     parameters: {
@@ -1298,6 +1538,7 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
       let collectedChurn = [];
       let collectedLogs = [];
       let collectedEmailDraft = null;
+      let collectedWhatsappDraft = null;
 
       const toolExecutor = async (toolName, toolArgs) => {
         if (toolName === 'get_store_stats') {
@@ -1318,6 +1559,11 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
         if (toolName === 'get_recent_audit_logs') {
           const res = await getRecentAuditLogsTool(toolArgs);
           collectedLogs = res.logs || [];
+          return { data: res };
+        }
+        if (toolName === 'draft_whatsapp_deal') {
+          const res = await draftWhatsappDealTool(toolArgs);
+          collectedWhatsappDraft = res.draft || null;
           return { data: res };
         }
         if (toolName === 'draft_crm_email') {
@@ -1343,6 +1589,7 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
         churnData: collectedChurn,
         logs: collectedLogs,
         emailDraft: collectedEmailDraft,
+        whatsappDraft: collectedWhatsappDraft,
         suggestions: ['Store KPIs', 'Inventory alerts', 'Churn risk analysis', 'Draft deal email to customer', 'Audit logs']
       };
     } catch (llmErr) {
@@ -1366,6 +1613,8 @@ module.exports = {
   getRecentAuditLogsTool,
   draftCrmEmailTool,
   sendCrmEmailTool,
+  draftWhatsappDealTool,
+  sendWhatsappDealTool,
   // Main dispatchers
   processCustomerMessage,
   processAdminMessage

@@ -89,7 +89,7 @@ jest.mock('../../src/models/User', () => ({
   find: jest.fn().mockReturnValue({
     limit: jest.fn().mockReturnThis(),
     lean: jest.fn().mockResolvedValue([
-      { _id: '64f1a2b3c4d5e6f7a8b9c0f3', name: 'John Doe', email: 'john@example.com', createdAt: new Date() }
+      { _id: '64f1a2b3c4d5e6f7a8b9c0f3', name: 'John Doe', email: 'john@example.com', phone: '9876543210', createdAt: new Date() }
     ])
   }),
   findOne: jest.fn().mockImplementation(() => ({
@@ -97,7 +97,8 @@ jest.mock('../../src/models/User', () => ({
     lean: jest.fn().mockResolvedValue({
       _id: '64f1a2b3c4d5e6f7a8b9c0f3',
       name: 'John Doe',
-      email: 'john@example.com'
+      email: 'john@example.com',
+      phone: '9876543210'
     })
   })),
   findById: jest.fn().mockImplementation((id) => ({
@@ -120,6 +121,22 @@ jest.mock('../../src/services/emailService', () => ({
   emailTemplates: {
     crmDeal: jest.fn().mockReturnValue({ subject: 'Special Offer from E-Shop!', html: '<p>Offer</p>' })
   }
+}));
+
+// Mock whatsappService
+jest.mock('../../src/services/whatsappService', () => ({
+  whatsappTemplates: {
+    crmDeal: jest.fn().mockReturnValue('🎉 Exclusive Deal from E-Shop!\n\nUse code WA20 for 20% OFF!')
+  },
+  formatWhatsappNumber: jest.fn().mockImplementation((p) => `91${(p || '').toString().replace(/\D/g, '').slice(-10)}`),
+  generateWaLink: jest.fn().mockReturnValue('https://wa.me/919876543210?text=Special%20Deal'),
+  sendWhatsappMessage: jest.fn().mockResolvedValue({
+    success: true,
+    messageId: 'wa-msg-int-test-456',
+    recipientPhone: '919876543210',
+    waLink: 'https://wa.me/919876543210?text=Special%20Deal',
+    mode: 'web_link'
+  })
 }));
 
 // Mock jwt utils for auth
@@ -255,6 +272,26 @@ describe('AI Chatbot & Operations Copilot API Integration Tests', () => {
       expect(res.body.emailDraft.dealCode).toBe('DIWALI20');
       expect(res.body.emailDraft.discountPercent).toBe(20);
     });
+
+    it('should return WhatsApp deal draft preview when admin requests WhatsApp outreach', async () => {
+      const adminToken = jwt.sign(
+        { id: '64f1a2b3c4d5e6f7a8b9c0d9', role: 'admin', tokenVersion: 0 },
+        process.env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      const res = await request(app)
+        .post('/api/chat/admin')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ message: 'Send WhatsApp deal code WA25 to 9876543210 with 25% discount' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.whatsappDraft).toBeDefined();
+      expect(res.body.whatsappDraft.customerPhone).toBe('9876543210');
+      expect(res.body.whatsappDraft.dealCode).toBe('WA25');
+      expect(res.body.whatsappDraft.discountPercent).toBe(25);
+    });
   });
 
   describe('Admin Confirmed CRM Email Dispatch — POST /api/chat/admin/send-email', () => {
@@ -309,6 +346,62 @@ describe('AI Chatbot & Operations Copilot API Integration Tests', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.customerEmail).toBe('john@example.com');
+      expect(res.body.message).toContain('successfully dispatched');
+    });
+  });
+
+  describe('Admin Confirmed CRM WhatsApp Dispatch — POST /api/chat/admin/send-whatsapp', () => {
+    it('should reject unauthenticated request with 401 Unauthorized', async () => {
+      const res = await request(app)
+        .post('/api/chat/admin/send-whatsapp')
+        .send({
+          customerPhone: '9876543210',
+          message: 'WhatsApp exclusive offer!'
+        });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('should reject request missing customerPhone with 400 Bad Request', async () => {
+      const adminToken = jwt.sign(
+        { id: '64f1a2b3c4d5e6f7a8b9c0d9', role: 'admin', tokenVersion: 0 },
+        process.env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      const res = await request(app)
+        .post('/api/chat/admin/send-whatsapp')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ message: 'Missing phone' });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('valid customer phone number');
+    });
+
+    it('should successfully dispatch WhatsApp message and return audit record when requested by admin', async () => {
+      const adminToken = jwt.sign(
+        { id: '64f1a2b3c4d5e6f7a8b9c0d9', role: 'admin', tokenVersion: 0 },
+        process.env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      const res = await request(app)
+        .post('/api/chat/admin/send-whatsapp')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          customerPhone: '9876543210',
+          customerName: 'John Doe',
+          message: 'Exclusive 20% discount on all electronics. Use code WA20 at checkout!',
+          dealCode: 'WA20',
+          discountPercent: 20
+        });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.customerPhone).toBe('919876543210');
+      expect(res.body.waLink).toBeDefined();
       expect(res.body.message).toContain('successfully dispatched');
     });
   });
