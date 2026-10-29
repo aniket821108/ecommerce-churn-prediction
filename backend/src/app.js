@@ -18,6 +18,7 @@ const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const cartRoutes = require('./routes/cartRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 
@@ -99,6 +100,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/chat', chatRoutes);
 
 // ── Serve Frontend in Production ──────────────────────────
 // In production, the built React app is served from /public

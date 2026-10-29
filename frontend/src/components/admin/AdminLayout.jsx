@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
+import AdminCopilot from './AdminCopilot';
 import useAuthStore from '../../store/authStore';
 import {
   ArrowTopRightOnSquareIcon,
@@ -21,6 +22,7 @@ const AdminLayout = () => {
   const location = useLocation();
   const { user } = useAuthStore();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const currentTitle = breadcrumbTitles[location.pathname] || 'Control Center';
 
@@ -56,7 +58,7 @@ const AdminLayout = () => {
             </div>
           </div>
 
-          {/* Right: Store Status + View Storefront + Profile Pill */}
+          {/* Right: Store Status + View Storefront + AI Copilot + Profile Pill */}
           <div className="flex items-center gap-3">
             {/* Live Indicator */}
             <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-xs font-semibold">
@@ -72,6 +74,15 @@ const AdminLayout = () => {
               <span>Storefront</span>
               <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5 text-slate-400" />
             </Link>
+
+            {/* AI Operations Copilot Trigger */}
+            <button
+              onClick={() => setCopilotOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-violet-700 bg-violet-50 border border-violet-200/80 hover:bg-violet-100 hover:border-violet-300 shadow-xs transition-all duration-150 active:scale-95 cursor-pointer"
+            >
+              <SparklesIcon className="w-3.5 h-3.5 text-violet-600 animate-pulse" />
+              <span>AI Copilot</span>
+            </button>
 
             {/* Admin Profile Pill */}
             <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
@@ -107,6 +118,12 @@ const AdminLayout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* ── Admin Operations Copilot Drawer ── */}
+      <AdminCopilot
+        isOpen={copilotOpen}
+        onClose={() => setCopilotOpen(false)}
+      />
     </div>
   );
 };

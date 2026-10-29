@@ -128,7 +128,16 @@
 
 ---
 
-## 8. System & Observability
+## 8. AI Chatbot & Operations Copilot Endpoints (`/api/chat`)
+
+| Method | Endpoint | Access | Description | Request Body Payload |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/chat/customer` | Public / Optional Auth | Storefront conversational shopping concierge. Grounded catalog search, order tracking, and store policies. | `{ "message": "Find running shoes under ₹2,000", "conversationHistory": [] }` |
+| `POST` | `/api/chat/admin` | Admin Only (`admin`) | Executive operations copilot. Queries gross sales, order KPIs, inventory depletion, ML churn risk, and audit logs. | `{ "message": "Show executive KPIs and revenue", "conversationHistory": [] }` |
+
+---
+
+## 9. System & Observability
 
 | Method | Endpoint | Access | Description |
 | :--- | :--- | :--- | :--- |

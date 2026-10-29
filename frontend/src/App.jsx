@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
+import ChatWidget from './components/chat/ChatWidget';
 import useAuthStore from './store/authStore';
 
 // ✅ Auth pages without container wrapping or Footer
@@ -28,6 +29,7 @@ function App() {
             <Outlet key={location.key} />
           </main>
           <Footer />
+          <ChatWidget />
         </>
       )}
     </div>
