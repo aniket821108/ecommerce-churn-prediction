@@ -1,8 +1,9 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingCartIcon, UserIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ShoppingCartIcon, UserIcon, Bars3Icon, XMarkIcon, CameraIcon } from '@heroicons/react/24/outline';
 import useAuthStore from '../../store/authStore';
 import useCartStore from '../../store/cartStore';
 import { useEffect, useState } from 'react';
+import VisualSearchModal from '../product/VisualSearchModal';
 
 const Header = () => {
   const { isAuthenticated, user, logout } = useAuthStore();
@@ -13,6 +14,7 @@ const Header = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [visualSearchOpen, setVisualSearchOpen] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const itemCount = isAuthenticated && !isAdmin
@@ -98,6 +100,19 @@ const Header = () => {
 
             {/* ── Right Actions ── */}
             <div className="flex items-center gap-2">
+
+              {/* AI Visual Search Button */}
+              <button
+                type="button"
+                onClick={() => setVisualSearchOpen(true)}
+                className="relative p-2 rounded-xl transition-all hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 text-xs font-bold border border-transparent hover:border-indigo-200"
+                title="AI Visual Search (Search Catalog with Photo)"
+              >
+                <CameraIcon className="h-5 w-5 text-indigo-600" />
+                <span className="hidden sm:inline bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border border-indigo-200/80">
+                  Visual Search
+                </span>
+              </button>
 
               {/* Cart */}
               {!isAdmin && (
@@ -271,6 +286,10 @@ const Header = () => {
           </div>
         )}
       </header>
+      <VisualSearchModal
+        isOpen={visualSearchOpen}
+        onClose={() => setVisualSearchOpen(false)}
+      />
     </>
   );
 };

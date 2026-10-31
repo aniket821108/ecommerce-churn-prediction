@@ -29,4 +29,13 @@ export const productService = {
   
   // Search
   searchProducts: (params) => api.get('/products/search', { params }),
+
+  // Visual Search via Gemini Vision
+  visualSearch: (imageFile) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    return api.post('/products/visual-search', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

@@ -16,7 +16,8 @@ const {
   deleteProduct,
   uploadProductImages,
   deleteProductImage,
-  searchProducts
+  searchProducts,
+  handleVisualSearch
 } = require('../controllers/productController');
 
 // Configure multer for file upload
@@ -42,11 +43,26 @@ const upload = multer({
   }
 });
 
+// Configure in-memory multer for AI visual search (zero disk write)
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, JPG, and WEBP images are allowed.'));
+    }
+  }
+});
+
 // Public routes
 router.get('/', getProducts);
 router.get('/search', searchProducts);
 router.get('/featured', getFeaturedProducts);
 router.get('/category/:category', getProductsByCategory);
+router.post('/visual-search', memoryUpload.single('image'), handleVisualSearch);
 router.get('/:id', getProduct);
 
 // Protected routes (Admin only)

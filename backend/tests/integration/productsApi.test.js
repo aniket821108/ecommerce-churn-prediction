@@ -55,6 +55,14 @@ describe('Products API Integration Tests', () => {
       expect(res.body.code).toBe('INVALID_ID');
       expect(res.body.message).toContain('Invalid _id');
     });
+
+    it('POST /api/products/visual-search without image file should return 400 Bad Request', async () => {
+      const res = await request(app).post('/api/products/visual-search');
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('upload an image file');
+    });
   });
 
   describe('Protected Product Mutation Endpoints (401 Unauthorized)', () => {

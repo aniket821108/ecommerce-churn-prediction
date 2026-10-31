@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const AdminLog = require('../models/AdminLog');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
+const visualSearchService = require('../services/visualSearchService');
 const logger = require('../utils/logger');
 
 // Helper function for pagination
@@ -265,6 +266,30 @@ exports.deleteProductImage = catchAsync(async (req, res, next) => {
 });
 
 // @desc    Search products
+// @desc    AI Visual Search via Google Gemini Vision
+// @route   POST /api/products/visual-search
+// @access  Public
+exports.handleVisualSearch = catchAsync(async (req, res, next) => {
+  if (!req.file || !req.file.buffer) {
+    return next(new AppError('Please upload an image file (JPEG, PNG, or WEBP) for visual search.', 400));
+  }
+
+  const analysis = await visualSearchService.analyzeImageWithGemini(
+    req.file.buffer,
+    req.file.mimetype || 'image/jpeg'
+  );
+
+  const products = await visualSearchService.findMatchingProducts(analysis, 12);
+
+  res.status(200).json({
+    success: true,
+    message: `Visual search identified: ${analysis.detectedItem || 'Product'}`,
+    analysis,
+    count: products.length,
+    products
+  });
+});
+
 exports.searchProducts = catchAsync(async (req, res) => {
   const { q } = req.query;
   const products = await Product.find({ $text: { $search: q }, isActive: true });
