@@ -227,14 +227,22 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
   try {
     const query = {};
 
+    let cleanOrderNumber = null;
+    if (orderNumber && typeof orderNumber === 'string') {
+      const trimmed = orderNumber.trim().replace(/^#/, '');
+      if (trimmed.toLowerCase() !== 'order' && trimmed.length > 0) {
+        cleanOrderNumber = trimmed;
+      }
+    }
+
     if (userId) {
       query.user = userId;
-      if (orderNumber) {
-        query.orderNumber = orderNumber.trim();
+      if (cleanOrderNumber) {
+        query.orderNumber = new RegExp(`^${cleanOrderNumber}$`, 'i');
       }
-    } else if (orderNumber && email) {
+    } else if (cleanOrderNumber && email) {
       // Guest lookup requires matching orderNumber AND customer email
-      query.orderNumber = orderNumber.trim();
+      query.orderNumber = new RegExp(`^${cleanOrderNumber}$`, 'i');
       const user = await User.findOne({ email: email.toLowerCase().trim() });
       if (!user) {
         return {
@@ -243,7 +251,7 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
         };
       }
       query.user = user._id;
-    } else if (orderNumber) {
+    } else if (cleanOrderNumber) {
       return {
         success: false,
         requiresAuth: true,
@@ -264,8 +272,8 @@ const getOrderStatusTool = async ({ orderNumber, userId, email }) => {
     if (!order) {
       return {
         success: false,
-        message: orderNumber
-          ? `Order #${orderNumber} was not found in your account.`
+        message: cleanOrderNumber
+          ? `Order #${cleanOrderNumber} was not found in your account.`
           : 'No recent orders found in your account.'
       };
     }
@@ -885,7 +893,27 @@ const processCustomerFallback = async ({ message, user, userId }) => {
   const text = (message || '').trim().toLowerCase();
 
   // 1. Order tracking intent
-  const orderMatch = text.match(/ord[a-z0-9-]+/i) || text.match(/\b\d{6,}\b/);
+  // Helper to accurately extract order numbers (and NEVER mistakenly capture the English word "order")
+  const extractOrderNumber = (input) => {
+    if (!input) return null;
+    const ordMatch = input.match(/#?(ord[-_]?[0-9][a-z0-9_-]*)/i);
+    if (ordMatch) return ordMatch[1].toUpperCase();
+
+    const hashMatch = input.match(/#([a-z0-9_-]{4,})/i);
+    if (hashMatch && hashMatch[1].toLowerCase() !== 'order') {
+      return hashMatch[1].toUpperCase();
+    }
+
+    const numMatch = input.match(/\b\d{8,}\b/);
+    if (numMatch) return numMatch[0];
+
+    const hexMatch = input.match(/\b[a-f0-9]{24}\b/i);
+    if (hexMatch) return hexMatch[0];
+
+    return null;
+  };
+
+  const detectedOrderNumber = extractOrderNumber(text);
   const emailInText = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const customerEmail = user?.email || (emailInText ? emailInText[0] : null);
   const isOrderQuery =
@@ -894,16 +922,18 @@ const processCustomerFallback = async ({ message, user, userId }) => {
     text.includes('track order') ||
     text.includes('track my order') ||
     text.includes('my orders') ||
-    Boolean(orderMatch);
+    text.includes('where is order') ||
+    text.includes('my order') ||
+    Boolean(detectedOrderNumber);
 
   if (isOrderQuery) {
-    const orderNumber = orderMatch ? orderMatch[0] : null;
+    const orderNumber = detectedOrderNumber;
     const result = await getOrderStatusTool({ orderNumber, userId, email: customerEmail });
 
     if (result.success && result.order) {
       const o = result.order;
       return {
-        reply: `Here are the latest details for **Order #${o.orderNumber}**.\n\n` +
+        reply: `Here are the latest details for ${!orderNumber ? 'your most recent order' : `Order **#${o.orderNumber}**`}.\n\n` +
           `• **Status:** ${o.status.toUpperCase()}${o.isCancelled ? ' (Cancelled)' : ''}\n` +
           `• **Courier:** ${o.courier}\n` +
           (o.trackingNumber ? `• **Tracking ID:** \`${o.trackingNumber}\`\n` : '') +
@@ -1406,11 +1436,11 @@ const customerToolDeclarations = [
   },
   {
     name: 'get_order_status',
-    description: 'Fetches real-time fulfillment status, tracking number, courier, and items for an order.',
+    description: 'Fetches real-time fulfillment status, tracking number, courier, and items for an order. If orderNumber is omitted, it automatically fetches the user\'s most recent active order.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        orderNumber: { type: 'STRING', description: 'The order number, e.g. ORD-170000000000' }
+        orderNumber: { type: 'STRING', description: 'The order number, e.g. ORD261031663762. Leave empty if user asks for "my order" without an explicit number.' }
       }
     }
   },
@@ -1508,7 +1538,7 @@ const processCustomerMessage = async ({ message, conversationHistory = [], user,
         'CRITICAL ZERO-HALLUCINATION RULES:\n' +
         '1. You MUST NEVER invent or hallucinate products, discounts, or stock levels. Only reference data returned by tools.\n' +
         '2. When users ask for product recommendations, ALWAYS call search_catalog with relevant filters.\n' +
-        '3. When users ask about order tracking or status, call get_order_status.\n' +
+        '3. When users ask about order tracking or status (e.g. "where is my order", "track order", or mentions an order number), ALWAYS call get_order_status immediately without asking the user for an order number. If no number is mentioned, call it with empty arguments so their latest order is fetched.\n' +
         '4. When users ask about returns, shipping, or payments, call get_store_faq.\n' +
         '5. Keep responses concise, friendly, and formatted in clean markdown.\n' +
         '6. Today\'s verified date is ' + new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + '. If users ask everyday normal questions like the current date, time, greetings, or general pleasantries, answer accurately and politely.';
@@ -1524,7 +1554,7 @@ const processCustomerMessage = async ({ message, conversationHistory = [], user,
         }
         if (toolName === 'get_order_status') {
           const res = await getOrderStatusTool({
-            orderNumber: toolArgs.orderNumber,
+            orderNumber: (toolArgs?.orderNumber && typeof toolArgs.orderNumber === 'string' && toolArgs.orderNumber.toLowerCase() !== 'order') ? toolArgs.orderNumber.replace(/^#/, '').trim() : null,
             userId,
             email: user?.email
           });
