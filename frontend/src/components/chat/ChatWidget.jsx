@@ -255,8 +255,12 @@ const ChatWidget = () => {
       const isAutomated = deliveryMode === 'cloud_api' || deliveryMode === 'twilio_api';
 
       if (!isAutomated && targetWaLink) {
-        window.open(targetWaLink, '_blank', 'noopener,noreferrer');
-        toast.success(`Opening WhatsApp Web for +91 ${draft.customerPhone}... Click Send in WhatsApp!`);
+        const opened = window.open(targetWaLink, '_blank', 'noopener,noreferrer');
+        if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+          toast.success(`Audit log saved! Click "Open in WhatsApp Web" below to send the message.`, { duration: 6000 });
+        } else {
+          toast.success(`Opening WhatsApp Web for +91 ${draft.customerPhone}... Click Send in WhatsApp!`);
+        }
       } else {
         toast.success(`WhatsApp deal dispatched via API to +91 ${draft.customerPhone}!`);
       }
@@ -736,7 +740,7 @@ const ChatWidget = () => {
                             ) : (
                               <>
                                 <PaperAirplaneIcon className="w-3.5 h-3.5" />
-                                <span>Send via WhatsApp Web</span>
+                                <span>Confirm & Dispatch Deal</span>
                               </>
                             )}
                           </button>
