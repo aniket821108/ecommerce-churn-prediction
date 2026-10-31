@@ -977,6 +977,28 @@ const processCustomerFallback = async ({ message, user, userId }) => {
     maxPrice = Number(underPriceMatch[1].replace(/,/g, ''));
   }
 
+  // 3.5 Date & Time Inquiry Check
+  const isDateQuery =
+    (text.includes('date') || text.includes('what day is') || text.includes('what is today') || text.includes('today date')) &&
+    !text.includes('deal') &&
+    !text.includes('product') &&
+    !text.includes('offer') &&
+    !text.includes('discount');
+
+  if (isDateQuery) {
+    const todayStr = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    return {
+      reply: `Today is **${todayStr}**! 📅\n\nHow can I help you with your shopping today?`,
+      products: [],
+      suggestions: ['Find running shoes under ₹2,000', 'Best deals today', 'Where is my order?']
+    };
+  }
+
   // 4. Pure Friendly Greeting Check (BEFORE catalog search to prevent matching random words)
   const isPureGreeting =
     /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|howdy|namaste|sup|yo|who are you|what can you do)\b/i.test(text.trim()) &&
@@ -1261,7 +1283,8 @@ const executeGeminiWithTools = async ({
     throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   // Format message history
   const contents = [];
@@ -1474,7 +1497,8 @@ const processCustomerMessage = async ({ message, conversationHistory = [], user,
         '2. When users ask for product recommendations, ALWAYS call search_catalog with relevant filters.\n' +
         '3. When users ask about order tracking or status, call get_order_status.\n' +
         '4. When users ask about returns, shipping, or payments, call get_store_faq.\n' +
-        '5. Keep responses concise, friendly, and formatted in clean markdown.';
+        '5. Keep responses concise, friendly, and formatted in clean markdown.\n' +
+        '6. Today\'s verified date is ' + new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + '. If users ask everyday normal questions like the current date, time, greetings, or general pleasantries, answer accurately and politely.';
 
       let collectedProducts = [];
       let collectedOrder = null;
@@ -1537,7 +1561,8 @@ const processAdminMessage = async ({ message, conversationHistory = [], adminUse
         '1. Only report metrics retrieved from the database tools.\n' +
         '2. Present numbers with Indian currency notation (₹) and clear bullet points.\n' +
         '3. When the administrator asks to send an email, offer, or deal to a customer, use the draft_crm_email tool to compose an interactive draft.\n' +
-        '4. Maintain a professional, executive tone.';
+        '4. Today\'s verified date is ' + new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + '.\n' +
+        '5. Maintain a professional, executive tone.';
 
       let collectedKpis = null;
       let collectedAlerts = [];
