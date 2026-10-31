@@ -102,23 +102,6 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
       const contentSid = (process.env.TWILIO_CONTENT_SID || '').trim();
       const hasValidContentSid = contentSid.startsWith('HX');
 
-      // Twilio WhatsApp business-initiated messages require an approved Content Template (SID starting with "HX...").
-      // If no valid HX Content SID is configured, we seamlessly use WhatsApp Web Click-to-Chat mode.
-      if (!hasValidContentSid) {
-        logger.info(
-          `Twilio WhatsApp automated API requires an approved Content SID (starts with "HX..."). Generated pre-filled WhatsApp Web link for +${formattedPhone}`
-        );
-        return {
-          success: true,
-          messageId: `wa-weblink-${Date.now()}`,
-          recipientPhone: formattedPhone,
-          messageText,
-          waLink,
-          mode: 'web_link',
-          fallbackNotice: 'Twilio Content SID (HX...) not configured. Opened via WhatsApp Web.'
-        };
-      }
-
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`;
       const params = new URLSearchParams();
       const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:')
@@ -127,12 +110,18 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
 
       params.append('From', fromNumber);
       params.append('To', `whatsapp:+${formattedPhone}`);
-      params.append('ContentSid', contentSid);
-      params.append('ContentVariables', JSON.stringify({
-        '1': data.customerName || 'Valued Customer',
-        '2': data.dealCode || 'SPECIAL25',
-        '3': data.discountPercent ? `${data.discountPercent}%` : '25%'
-      }));
+
+      if (hasValidContentSid) {
+        params.append('ContentSid', contentSid);
+        params.append('ContentVariables', JSON.stringify({
+          '1': data.customerName || 'Valued Customer',
+          '2': data.dealCode || 'SPECIAL25',
+          '3': data.discountPercent ? `${data.discountPercent}%` : '25%'
+        }));
+      } else {
+        // Free-form message body within the active 24-hour WhatsApp session window
+        params.append('Body', messageText);
+      }
 
       const authHeader = Buffer.from(
         `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
@@ -161,23 +150,17 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
       } catch (twErr) {
         const twData = twErr.response?.data;
         logger.warn(
-          `Twilio automated WhatsApp dispatch failed (${twData?.code || twErr.message}). Gracefully falling back to WhatsApp Web click-to-chat:`,
+          `Twilio automated WhatsApp dispatch failed (${twData?.code || twErr.message}):`,
           twData || twErr.message
         );
 
-        // Never fail the admin request. Fall back to pre-filled WhatsApp Web click-to-chat.
-        return {
-          success: true,
-          messageId: `wa-fallback-${Date.now()}`,
-          recipientPhone: formattedPhone,
-          messageText,
-          waLink,
-          mode: 'web_link',
-          fallbackNotice:
-            twData?.code === 21654 || twData?.code === 21655
-              ? 'Twilio template required for automated API dispatch. Opened via WhatsApp Web instead.'
-              : (twData?.message || 'Twilio unavailable; opened via WhatsApp Web.')
-        };
+        if (twData?.code === 21654 || twData?.code === 63016 || twData?.code === 63007) {
+          throw new Error(
+            `Twilio 24-Hour WhatsApp Session Expired: Please send "hi" from your WhatsApp (+${formattedPhone}) to ${fromNumber.replace('whatsapp:', '')} to re-open the 24-hour delivery session. Once sent, clicking "Confirm & Dispatch Deal" will deliver messages directly to your phone instantly!`
+          );
+        }
+
+        throw new Error(twData?.message || twErr.message || 'Twilio WhatsApp dispatch failed');
       }
     }
 
