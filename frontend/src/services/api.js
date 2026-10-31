@@ -20,6 +20,15 @@ const processQueue = (error) => {
 const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-otp'];
 const isAuthPage = () => AUTH_PATHS.some((p) => window.location.pathname.startsWith(p));
 
+// ── Request interceptor ────────────────────────────────
+api.interceptors.request.use((config) => {
+  // Let the browser set the multipart/form-data boundary automatically when sending FormData
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+  return config;
+});
+
 // ── Response interceptor ──────────────────────────────
 api.interceptors.response.use(
   (response) => response,

@@ -2,7 +2,12 @@ import api from './api';
 
 export const userService = {
   getUserProfile: () => api.get('/users/profile'),
-  updateUserProfile: (data) => api.put('/users/profile', data),
+  updateUserProfile: (data) => {
+    const isFormData = data instanceof FormData;
+    return api.put('/users/profile', data, isFormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {});
+  },
   getUserOrders: (params) => api.get('/users/orders', { params }),
   getUserOrder: (id) => api.get(`/users/orders/${id}`),
   // Admin

@@ -4,7 +4,7 @@ const AdminLog = require('../models/AdminLog');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
 // ✅ IMPORT CLOUDINARY UPLOAD FUNCTION
-const { uploadToCloudinary } = require('../config/cloudinary');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
@@ -40,6 +40,15 @@ exports.updateUserProfile = catchAsync(async (req, res, next) => {
   // ✅ 2. HANDLE IMAGE UPLOAD (If a file was sent)
   if (req.file) {
     try {
+      // Clean up previous avatar from Cloudinary if it exists
+      if (user.avatar?.publicId) {
+        try {
+          await deleteFromCloudinary(user.avatar.publicId);
+        } catch (delErr) {
+          logger.warn('Failed to delete previous avatar from Cloudinary:', delErr.message);
+        }
+      }
+
       const uploadResult = await uploadToCloudinary(req.file.path, 'avatars');
       
       // Update avatar field

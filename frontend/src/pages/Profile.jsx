@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '../services/userService';
 import useAuthStore from '../store/authStore';
@@ -65,6 +65,7 @@ const Profile = () => {
   });
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // ── Password form state
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -81,6 +82,26 @@ const Profile = () => {
 
   // ── Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState('');
+
+  // ── Sync form data when user state loads or updates
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+      });
+      if (user.address) {
+        setAddressData({
+          street: user.address.street || '',
+          city: user.address.city || '',
+          state: user.address.state || '',
+          zipCode: user.address.zipCode || '',
+          country: user.address.country || 'India',
+        });
+      }
+    }
+  }, [user]);
 
   // ── Queries
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -100,10 +121,14 @@ const Profile = () => {
       if (avatarFile) fd.append('avatar', avatarFile);
       return userService.updateUserProfile(fd);
     },
-    onSuccess: async () => {
-      await loadUser();           // ✅ re-fetches user from backend → updates Zustand store → avatar persists
+    onSuccess: async (res) => {
+      if (res?.data?.user) {
+        useAuthStore.getState().setAuth(res.data.user);
+      }
+      await loadUser();
       queryClient.invalidateQueries(['userProfile']);
-      setAvatarFile(null);        // clear the pending file after save
+      setAvatarFile(null);
+      setAvatarPreview(null);
       toast.success('Profile updated!');
     },
     onError: (e) => toast.error(e.response?.data?.message || 'Update failed'),
@@ -125,11 +150,45 @@ const Profile = () => {
   });
 
   // ── Handlers
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPEG, PNG, WEBP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+    setUploadingAvatar(true);
+
+    try {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const res = await userService.updateUserProfile(fd);
+
+      if (res?.data?.user) {
+        useAuthStore.getState().setAuth(res.data.user);
+      }
+      await loadUser();
+      queryClient.invalidateQueries(['userProfile']);
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      try { URL.revokeObjectURL(previewUrl); } catch (_) {}
+      toast.success('Profile picture updated successfully!');
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      setAvatarPreview(null);
+      toast.error(err.response?.data?.message || 'Failed to upload profile picture');
+    } finally {
+      setUploadingAvatar(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   const handlePasswordSubmit = (e) => {
@@ -169,18 +228,25 @@ const Profile = () => {
             {/* Avatar */}
             <div className="relative mb-4">
               <div
-                className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden text-white text-xl font-black"
+                className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden text-white text-xl font-black relative"
                 style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
               >
                 {avatarSrc
                   ? <img src={avatarSrc} alt="Avatar" className="w-full h-full object-cover" />
                   : initials
                 }
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-10">
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-white transition-transform hover:scale-110"
+                disabled={uploadingAvatar}
+                className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-white transition-transform hover:scale-110 disabled:opacity-50"
                 style={{ background: '#4f46e5', boxShadow: '0 2px 8px rgba(79,70,229,0.4)' }}
+                title="Change Profile Picture"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -188,7 +254,7 @@ const Profile = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/jpg,image/webp" className="hidden" onChange={handleAvatarChange} />
             </div>
 
             <p className="font-black text-gray-900 text-sm">{user?.name}</p>
