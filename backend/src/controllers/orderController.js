@@ -7,6 +7,41 @@ const invoiceService = require('../services/invoiceService');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
 
+/**
+ * Calculate statutory Indian GST per Section 15(3) of CGST Act:
+ * - Trade discount deducted before computing tax.
+ * - Books (HSN 4901 / category: books) are NIL rated (0% GST).
+ * - Other goods are standard 18% GST.
+ */
+const calculateOrderTax = (items, subtotal, discount = 0) => {
+  if (!items || items.length === 0 || subtotal <= 0) {
+    return 0;
+  }
+  const safeDiscount = Math.min(Math.max(0, Number(discount) || 0), subtotal);
+  const discountRatio = subtotal > 0 ? safeDiscount / subtotal : 0;
+
+  let totalTax = 0;
+  for (const item of items) {
+    const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+    const allocatedDiscount = itemTotal * discountRatio;
+    const taxableBase = Math.max(0, itemTotal - allocatedDiscount);
+
+    const name = (item.name || '').toLowerCase();
+    const category = (item.category || '').toLowerCase();
+    const sku = (item.sku || '').toUpperCase();
+
+    const isBook = category === 'books' || sku.startsWith('HSN-4901') || name.includes('book') || name.includes('novel');
+    const gstRate = isBook ? 0 : 0.18;
+
+    totalTax += taxableBase * gstRate;
+  }
+
+  return +(totalTax.toFixed(2));
+};
+
+exports.calculateOrderTax = calculateOrderTax;
+
+
 // @desc    Create new order
 // @route   POST /api/orders
 // @access  Private
@@ -63,10 +98,10 @@ exports.createOrder = catchAsync(async (req, res, next) => {
       });
     }
 
-    const tax = subtotal * 0.18; // 18% GST (India)
+    const discount = Number(req.body.discount) || 0;
+    const tax = calculateOrderTax(orderItems, subtotal, discount);
     const shippingCost = subtotal > 1000 ? 0 : 50; // Free shipping above ₹1000
-    const discount = 0;
-    const total = subtotal + tax + shippingCost - discount;
+    const total = +(subtotal - discount + tax + shippingCost).toFixed(2);
 
     const order = await Order.create({
       user: req.userId,
@@ -166,10 +201,10 @@ exports.createOrderFromCart = catchAsync(async (req, res, next) => {
       throw new AppError('No valid items found in cart to checkout', 400);
     }
 
-    const tax = subtotal * 0.18;
-    const shippingCost = subtotal > 1000 ? 0 : 50;
     const discount = cart.discountAmount || 0;
-    const total = subtotal + tax + shippingCost - discount;
+    const tax = calculateOrderTax(orderItems, subtotal, discount);
+    const shippingCost = subtotal > 1000 ? 0 : 50;
+    const total = +(subtotal - discount + tax + shippingCost).toFixed(2);
 
     const order = await Order.create({
       user: req.userId,

@@ -128,8 +128,21 @@ The evolution of E-Shop is structured into three progressive, learning-oriented 
 
 ---
 
-### Feature B.3: Automated PDF Invoice Generation & Email Dispatch
-- **Classification:** **Useful Enhancement**
+### Feature B.3: Automated PDF Invoice Generation & Email Dispatch — [COMPLETED & HARDENED]
+- **Classification:** **Implemented & Verified** (November 2026)
+- **Status:** Complete with Section 15(3) CGST Act compliance (pre-tax trade discount deduction), statutory 0% NIL rate for books (HSN 4901), multi-page A4 PDF streaming with dynamic pagination, and verification QR code.
+
+---
+
+### Feature B.4: Multimodal AI Visual Search (Gemini Vision) — [COMPLETED & HARDENED]
+- **Classification:** **Implemented & Verified** (November 2026)
+- **Status:** Complete with in-memory zero-disk upload pipeline, Google Gemini Vision API inference, optical character recognition (OCR) and token Jaccard similarity scoring, and dedicated 25 req/15min rate limiting.
+
+---
+
+### Feature B.5: Interactive Delivery Map Simulation (Leaflet) — [COMPLETED & HARDENED]
+- **Classification:** **Implemented & Verified** (November 2026)
+- **Status:** Complete with Leaflet 1.9 map, OpenStreetMap CartoDB tiles, simulated turn-by-turn coordinate progression, dynamic ETA countdown, order lifecycle state gating (suppressed on cancelled/pending orders), and unmapped city demonstration disclosure badges.
 - **Complexity:** Easy
 - **What it does:** Generates a professional branded PDF invoice upon order placement or delivery, and emails it as an attachment to the customer.
 - **Problem it solves:** Provides legitimate customer receipts and transactional closure.

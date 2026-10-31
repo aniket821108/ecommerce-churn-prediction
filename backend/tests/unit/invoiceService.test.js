@@ -1,5 +1,5 @@
 const invoiceService = require('../../src/services/invoiceService');
-const { downloadInvoice } = require('../../src/controllers/orderController');
+const { downloadInvoice, calculateOrderTax } = require('../../src/controllers/orderController');
 const Order = require('../../src/models/Order');
 
 jest.mock('../../src/models/Order');
@@ -30,11 +30,38 @@ describe('Invoice Service & Controller Unit Tests', () => {
 
     it('should use item.sku when prefixed with HSN-', () => {
       expect(invoiceService.getHsnCode({ sku: 'HSN-8471' })).toBe('8471');
+      expect(invoiceService.getHsnCode({ sku: 'HSN-4901' })).toBe('4901');
     });
   });
 
-  describe('generateInvoiceBuffer', () => {
-    it('should generate a valid PDF buffer starting with %PDF- header', async () => {
+  describe('calculateOrderTax statutory GST rules (Section 15(3) CGST Act)', () => {
+    it('should apply 0% GST to books under HSN 4901 / book category', () => {
+      const items = [{ name: 'Clean Code Book', price: 1000, quantity: 1, category: 'books' }];
+      const tax = calculateOrderTax(items, 1000, 0);
+      expect(tax).toBe(0);
+    });
+
+    it('should deduct trade discounts before applying tax per Section 15(3)', () => {
+      // 1000 INR electronics item with 200 INR discount -> Taxable base = 800 -> 18% tax = 144
+      const items = [{ name: 'Wireless Headphones', price: 1000, quantity: 1, category: 'electronics' }];
+      const tax = calculateOrderTax(items, 1000, 200);
+      expect(tax).toBe(144);
+    });
+
+    it('should proportionately allocate discount in mixed orders (exempt books + taxable goods)', () => {
+      // Book 1000 (50%) + Headphones 1000 (50%) with 400 discount
+      // Allocated discount: 200 to Book (0% tax), 200 to Headphones (taxable base 800 * 18% = 144)
+      const items = [
+        { name: 'Architecture Book', price: 1000, quantity: 1, category: 'books' },
+        { name: 'Headphones', price: 1000, quantity: 1, category: 'electronics' }
+      ];
+      const tax = calculateOrderTax(items, 2000, 400);
+      expect(tax).toBe(144);
+    });
+  });
+
+  describe('generateInvoiceBuffer with multi-item pagination', () => {
+    it('should generate a valid PDF buffer starting with %PDF- header for single-item order', async () => {
       const mockOrder = {
         orderNumber: 'ORD202611019999',
         createdAt: new Date(),
@@ -66,6 +93,50 @@ describe('Invoice Service & Controller Unit Tests', () => {
       const buffer = await invoiceService.generateInvoiceBuffer(mockOrder);
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(1000);
+      expect(buffer.slice(0, 5).toString()).toBe('%PDF-');
+    });
+
+    it('should cleanly paginate multi-item orders (>8 items) across multiple pages without overflow', async () => {
+      const items = [];
+      for (let i = 1; i <= 10; i++) {
+        items.push({
+          name: `Product Line Item Number ${i}`,
+          price: 500,
+          quantity: 1,
+          sku: `SKU-ITEM-${i}`,
+          category: i % 2 === 0 ? 'books' : 'electronics'
+        });
+      }
+
+      const multiItemOrder = {
+        orderNumber: 'ORD20261101MULTI',
+        createdAt: new Date(),
+        user: { name: 'Enterprise Buyer', email: 'buyer@corp.com' },
+        shippingAddress: {
+          street: '77 Brigade Gateway',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          zipCode: '560055',
+          country: 'India',
+          phone: '+91 9876543210'
+        },
+        items,
+        subtotal: 5000,
+        discount: 500,
+        tax: 405,
+        shippingCost: 0,
+        total: 4905,
+        payment: {
+          method: 'razorpay',
+          status: 'completed',
+          transactionId: 'pay_multi_999',
+          paidAt: new Date()
+        }
+      };
+
+      const buffer = await invoiceService.generateInvoiceBuffer(multiItemOrder);
+      expect(Buffer.isBuffer(buffer)).toBe(true);
+      expect(buffer.length).toBeGreaterThan(5000);
       expect(buffer.slice(0, 5).toString()).toBe('%PDF-');
     });
   });

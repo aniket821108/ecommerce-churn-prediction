@@ -251,3 +251,77 @@ This document captures all confirmed defects, reliability hazards, and architect
   3. Fixed identical type mismatch in `userController.js` self-demotion and self-deletion prevention checks.
 
 
+
+---
+
+### Issue 13: Unthrottled AI Visual Search Quota Exhaustion (DoS Risk) — [RESOLVED]
+- **Severity:** High
+- **Priority:** P0 (Resolved - November 2026 Audit)
+- **Evidence:** `backend/src/routes/productRoutes.js:65`
+- **Relevant Files:**
+  - `backend/src/routes/productRoutes.js`
+  - `backend/src/middlewares/errorHandler.js`
+- **Initial Behavior:** Route `POST /api/products/visual-search` lacked dedicated rate limiting. A burst of unauthenticated requests could rapidly exhaust upstream Google Gemini Vision API free-tier quotas (15 RPM / 1,500 RPD). Multer size limit errors also threw generic 500 errors in production.
+- **Remediation Implemented:**
+  1. Attached dedicated `visualSearchLimiter` (25 req / 15 min per IP) directly to `POST /api/products/visual-search`.
+  2. Enhanced centralized `errorHandler.js` to map `MulterError` (`LIMIT_FILE_SIZE`) and disallowed image file types to operational HTTP 400 Bad Request responses with code `FILE_UPLOAD_ERROR` and `INVALID_FILE_TYPE`.
+- **Verification:** Unit and integration test suites pass; verified via `errorHandler.test.js`.
+
+---
+
+### Issue 14: Statutory GST Rate Violation & Post-Tax Discount Computation — [RESOLVED]
+- **Severity:** High
+- **Priority:** P1 (Resolved - November 2026 Audit)
+- **Evidence:** `backend/src/controllers/orderController.js:66-69, 169-172`
+- **Relevant Files:**
+  - `backend/src/controllers/orderController.js`
+  - `backend/src/services/invoiceService.js`
+- **Initial Behavior:** Applied a flat 18% GST across all items regardless of category. Books (HSN 4901 / category: 'books') were illegally taxed at 18% instead of the statutory 0% NIL rate. Trade discounts were deducted after tax rather than from the taxable supply base, violating Section 15(3) of the CGST Act, 2017.
+- **Remediation Implemented:**
+  1. Created `calculateOrderTax(items, subtotal, discount)` helper in `orderController.js` to allocate discounts proportionately to the taxable base before tax computation.
+  2. Exempted printed books (HSN 4901) with statutory 0% GST rate.
+  3. Aligned `invoiceService.js` PDF generation to display pre-tax discounts, 0% book exemption, and correct Intrastate vs Interstate bifurcation.
+- **Verification:** Tested in `invoiceService.test.js`; single-item and mixed-cart tax calculations verified against Section 15(3) rules.
+
+---
+
+### Issue 15: PDF Invoice Table Overlap on Multi-Item Orders (>6 Items) — [RESOLVED]
+- **Severity:** Medium
+- **Priority:** P1 (Resolved - November 2026 Audit)
+- **Evidence:** `backend/src/services/invoiceService.js:217-313`
+- **Relevant Files:**
+  - `backend/src/services/invoiceService.js`
+- **Initial Behavior:** The PDF table incremented Y coordinates linearly without pagination checks, causing table rows to collide with the digital signatory box and legal terms at hardcoded `footerY = 690` for orders containing > 6 items.
+- **Remediation Implemented:**
+  1. Extracted modular `renderTableHeader(y)` to repeat column headers on subsequent pages.
+  2. Implemented dynamic page-break detection (`if (currentY + rowHeight > 640) { doc.addPage(); ... }`).
+  3. Implemented space budgeting for summary totals and anchored the signatory footer dynamically.
+- **Verification:** Tested via 15-item order simulation; generated valid multi-page PDF buffer without overlap.
+
+---
+
+### Issue 16: Live Delivery Map Moving on Cancelled / Pending Orders — [RESOLVED]
+- **Severity:** Medium
+- **Priority:** P1 (Resolved - November 2026 Audit)
+- **Evidence:** `frontend/src/pages/OrderDetail.jsx:250`
+- **Relevant Files:**
+  - `frontend/src/pages/OrderDetail.jsx`
+- **Initial Behavior:** The `<LiveDeliveryMap order={order} />` component was mounted unconditionally. Cancelled and pending orders showed an active delivery van moving toward the destination with an active ETA countdown.
+- **Remediation Implemented:**
+  1. Guarded live map rendering: `{['processing', 'shipped', 'delivered'].includes(order.status) && <LiveDeliveryMap order={order} />}`.
+  2. Added informative cancellation banner for cancelled orders and awaiting-processing banner for pending orders.
+- **Verification:** Verified via Vite production build and manual component state inspection.
+
+---
+
+### Issue 17: Silent Geographic Fallback for Non-Metro Cities — [RESOLVED]
+- **Severity:** Low
+- **Priority:** P2 (Resolved - November 2026 Audit)
+- **Evidence:** `frontend/src/components/delivery/LiveDeliveryMap.jsx:110`
+- **Relevant Files:**
+  - `frontend/src/components/delivery/LiveDeliveryMap.jsx`
+- **Initial Behavior:** When customer shipping address city was not in the 17-city metro coordinate dictionary, the map silently fell back to Bengaluru coordinates without user disclosure.
+- **Remediation Implemented:**
+  1. Added `isCityMapped` boolean memo to check city dictionary presence.
+  2. Rendered prominent disclosure badge in the map card header: `Demo Route (Bengaluru Regional Hub)` when city is unmapped.
+- **Verification:** Verified via Vite production build.

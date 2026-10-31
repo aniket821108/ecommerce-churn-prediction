@@ -102,6 +102,14 @@ const LiveDeliveryMap = ({ order }) => {
   const [speedMultiplier, setSpeedMultiplier] = useState(2); // default 2x speed for good visual pacing
   const [deliveryStatus, setDeliveryStatus] = useState('on_the_way'); // 'on_the_way' | 'arrived'
 
+  // Check if customer city exists in static coordinate dictionary
+  const isCityMapped = useMemo(() => {
+    const rawCity = (order?.shippingAddress?.city || '')
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    return Boolean(CITY_COORDINATES[rawCity]);
+  }, [order?.shippingAddress?.city]);
+
   // Resolve Customer Destination Coordinates
   const destCoords = useMemo(() => {
     const rawCity = (order?.shippingAddress?.city || 'Bengaluru')
@@ -330,7 +338,7 @@ const LiveDeliveryMap = ({ order }) => {
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-extrabold text-slate-900">
                 Live Delivery Tracking
               </h3>
@@ -338,6 +346,12 @@ const LiveDeliveryMap = ({ order }) => {
                 <BoltIcon className="w-3 h-3 text-emerald-600" />
                 {deliveryStatus === 'arrived' ? 'Delivered' : 'Live GPS Feed'}
               </span>
+              {!isCityMapped && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1" title="Destination city unmapped in coordinate dictionary — simulated route rendered from regional fulfillment hub">
+                  <BoltIcon className="w-3 h-3 text-amber-600" />
+                  Demo Route (Bengaluru Regional Hub)
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Simulated real-time vehicle coordinate progression to customer address
@@ -514,3 +528,4 @@ const LiveDeliveryMap = ({ order }) => {
 };
 
 export default LiveDeliveryMap;
+

@@ -39,11 +39,13 @@ const getHsnCode = (item) => {
     return item.sku.replace('HSN-', '');
   }
   const name = (item.name || '').toLowerCase();
-  if (name.includes('phone') || name.includes('laptop') || name.includes('headphone') || name.includes('electronic')) return '8517';
-  if (name.includes('shirt') || name.includes('dress') || name.includes('shoe') || name.includes('wear')) return '6109';
-  if (name.includes('book') || name.includes('novel') || name.includes('guide')) return '4901';
-  if (name.includes('beauty') || name.includes('cream') || name.includes('perfume')) return '3304';
-  if (name.includes('home') || name.includes('chair') || name.includes('desk') || name.includes('table') || name.includes('furniture') || name.includes('light')) return '9403';
+  const category = (item.category || '').toLowerCase();
+
+  if (category === 'books' || name.includes('book') || name.includes('novel') || name.includes('guide')) return '4901';
+  if (category === 'electronics' || name.includes('phone') || name.includes('laptop') || name.includes('headphone') || name.includes('electronic')) return '8517';
+  if (category === 'clothing' || name.includes('shirt') || name.includes('dress') || name.includes('shoe') || name.includes('wear')) return '6109';
+  if (category === 'beauty' || name.includes('beauty') || name.includes('cream') || name.includes('perfume')) return '3304';
+  if (category === 'home' || name.includes('home') || name.includes('chair') || name.includes('desk') || name.includes('table') || name.includes('furniture') || name.includes('light')) return '9403';
   return '9983';
 };
 
@@ -78,14 +80,50 @@ const generateInvoice = async (order, outputStream) => {
       const SUCCESS_COLOR = '#16A34A';
 
       // --- GST Calculations ---
-      const subtotal = order.subtotal || 0;
-      const totalTax = order.tax || Math.round(subtotal * 0.18);
-      const shippingCost = order.shippingCost || 0;
-      const discount = order.discount || 0;
-      const grandTotal = order.total || (subtotal + totalTax + shippingCost - discount);
-
+      const subtotal = Number(order.subtotal) || 0;
+      const discount = Number(order.discount) || 0;
+      const shippingCost = Number(order.shippingCost) || 0;
       const customerState = (order.shippingAddress?.state || 'Delhi').trim();
       const isKarnataka = customerState.toLowerCase().includes('karnataka');
+
+      // Calculate itemized tax per Section 15(3) CGST Act
+      const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+      const discountRatio = subtotal > 0 ? Math.min(discount, subtotal) / subtotal : 0;
+
+      let computedTotalTax = 0;
+      const processedItems = items.map((item) => {
+        const itemPrice = Number(item.price) || 0;
+        const itemQty = Number(item.quantity) || 1;
+        const rawTotal = itemPrice * itemQty;
+        const allocatedDiscount = +(rawTotal * discountRatio).toFixed(2);
+        const taxableVal = Math.max(0, +(rawTotal - allocatedDiscount).toFixed(2));
+        const hsn = getHsnCode(item);
+
+        // Books under HSN 4901 are NIL-rated (0% GST) under Indian GST law
+        const isExempt = hsn === '4901';
+        const taxRate = isExempt ? 0 : 0.18;
+        const itemTax = +(taxableVal * taxRate).toFixed(2);
+        const itemLineTotal = +(taxableVal + itemTax).toFixed(2);
+
+        computedTotalTax += itemTax;
+
+        return {
+          ...item,
+          itemPrice,
+          itemQty,
+          hsn,
+          taxableVal,
+          isExempt,
+          taxRate,
+          itemTax,
+          itemLineTotal
+        };
+      });
+
+      const totalTax = order.tax !== undefined && order.tax !== null ? Number(order.tax) : +computedTotalTax.toFixed(2);
+      const grandTotal = order.total !== undefined && order.total !== null 
+        ? Number(order.total) 
+        : +(subtotal - discount + totalTax + shippingCost).toFixed(2);
 
       // Intrastate: CGST 9% + SGST 9% | Interstate: IGST 18%
       const cgst = isKarnataka ? +(totalTax / 2).toFixed(2) : 0;
@@ -120,29 +158,33 @@ const generateInvoice = async (order, outputStream) => {
       });
 
       // ==========================================
-      // 1. TOP HEADER & BRANDING
+      // 1. TOP HEADER & BRANDING (Page 1)
       // ==========================================
-      // Brand Logo Box
-      doc.roundedRect(36, 36, 62, 22, 4).fill(PRIMARY);
-      doc.fillColor('#FFFFFF').fontSize(10.5).font('Helvetica-Bold').text('E-SHOP', 44, 42);
+      const renderTopHeader = () => {
+        // Brand Logo Box
+        doc.roundedRect(36, 36, 62, 22, 4).fill(PRIMARY);
+        doc.fillColor('#FFFFFF').fontSize(10.5).font('Helvetica-Bold').text('E-SHOP', 44, 42);
 
-      // Company Title & GST Credentials
-      doc.fillColor(DARK).fontSize(11).font('Helvetica-Bold').text('E-Shop Retail Technologies Private Limited', 108, 36);
-      doc.fillColor(PRIMARY).fontSize(8.5).font('Helvetica-Bold').text('TAX INVOICE / BILL OF SUPPLY', 108, 50);
-      doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica')
-        .text('GSTIN: 29AABCE1234F1Z5  |  PAN: AABCE1234F  |  CIN: U72900KA2023PTC123456', 108, 62)
-        .text('Registered Office: Tech Park, Electronic City Phase 1, Bengaluru, Karnataka - 560100', 108, 72)
-        .text('Toll-Free Customer Support: +91 1800-200-8803  |  Email: tax-invoices@eshop.com', 108, 82);
+        // Company Title & GST Credentials
+        doc.fillColor(DARK).fontSize(11).font('Helvetica-Bold').text('E-Shop Retail Technologies Private Limited', 108, 36);
+        doc.fillColor(PRIMARY).fontSize(8.5).font('Helvetica-Bold').text('TAX INVOICE / BILL OF SUPPLY', 108, 50);
+        doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica')
+          .text('GSTIN: 29AABCE1234F1Z5  |  PAN: AABCE1234F  |  CIN: U72900KA2023PTC123456', 108, 62)
+          .text('Registered Office: Tech Park, Electronic City Phase 1, Bengaluru, Karnataka - 560100', 108, 72)
+          .text('Toll-Free Customer Support: +91 1800-200-8803  |  Email: tax-invoices@eshop.com', 108, 82);
 
-      // QR Code Box (Upper Right)
-      doc.image(qrBuffer, 485, 36, { width: 62, height: 62 });
-      doc.fillColor(SUCCESS_COLOR).fontSize(6.5).font('Helvetica-Bold').text('✓ GST VERIFIED', 484, 101, { width: 65, align: 'center' });
+        // QR Code Box (Upper Right)
+        doc.image(qrBuffer, 485, 36, { width: 62, height: 62 });
+        doc.fillColor(SUCCESS_COLOR).fontSize(6.5).font('Helvetica-Bold').text('✓ GST VERIFIED', 484, 101, { width: 65, align: 'center' });
 
-      // Horizontal Divider
-      doc.moveTo(36, 114).lineTo(559, 114).lineWidth(1.5).strokeColor(PRIMARY).stroke();
+        // Horizontal Divider
+        doc.moveTo(36, 114).lineTo(559, 114).lineWidth(1.5).strokeColor(PRIMARY).stroke();
+      };
+
+      renderTopHeader();
 
       // ==========================================
-      // 2. METADATA TWO-COLUMN SECTION
+      // 2. METADATA TWO-COLUMN SECTION (Page 1)
       // ==========================================
       const boxY = 124;
       const boxH = 92;
@@ -196,28 +238,36 @@ const generateInvoice = async (order, outputStream) => {
       });
 
       // ==========================================
-      // 3. ITEMIZED GST GOODS TABLE
+      // 3. ITEMIZED GST GOODS TABLE WITH PAGINATION
       // ==========================================
-      const tableY = 226;
       const rowHeight = 22;
 
-      // Table Header Row
-      doc.roundedRect(36, tableY, 523, 20, 3).fill(PRIMARY);
-      doc.fillColor('#FFFFFF').fontSize(7.5).font('Helvetica-Bold');
+      const renderTableHeader = (y) => {
+        doc.roundedRect(36, y, 523, 20, 3).fill(PRIMARY);
+        doc.fillColor('#FFFFFF').fontSize(7.5).font('Helvetica-Bold');
+        doc.text('#', 42, y + 6, { width: 18 });
+        doc.text('Item Description & SKU', 64, y + 6, { width: 170 });
+        doc.text('HSN', 238, y + 6, { width: 35, align: 'center' });
+        doc.text('Qty', 278, y + 6, { width: 25, align: 'center' });
+        doc.text('Unit Rate', 308, y + 6, { width: 55, align: 'right' });
+        doc.text('Taxable Base', 368, y + 6, { width: 60, align: 'right' });
+        doc.text(isKarnataka ? 'CGST+SGST' : 'IGST', 432, y + 6, { width: 55, align: 'right' });
+        doc.text('Total (INR)', 492, y + 6, { width: 60, align: 'right' });
+      };
 
-      doc.text('#', 42, tableY + 6, { width: 18 });
-      doc.text('Item Description & SKU', 64, tableY + 6, { width: 170 });
-      doc.text('HSN', 238, tableY + 6, { width: 35, align: 'center' });
-      doc.text('Qty', 278, tableY + 6, { width: 25, align: 'center' });
-      doc.text('Unit Rate', 308, tableY + 6, { width: 55, align: 'right' });
-      doc.text('Taxable Amt', 368, tableY + 6, { width: 60, align: 'right' });
-      doc.text(isKarnataka ? 'CGST+SGST' : 'IGST (18%)', 432, tableY + 6, { width: 55, align: 'right' });
-      doc.text('Total (INR)', 492, tableY + 6, { width: 60, align: 'right' });
+      let currentY = 226;
+      renderTableHeader(currentY);
+      currentY += 20;
 
-      let currentY = tableY + 20;
-      const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+      processedItems.forEach((item, index) => {
+        // Page break if approaching page bottom
+        if (currentY + rowHeight > 640) {
+          doc.addPage();
+          currentY = 40;
+          renderTableHeader(currentY);
+          currentY += 20;
+        }
 
-      items.forEach((item, index) => {
         const isAlt = index % 2 === 1;
         if (isAlt) {
           doc.rect(36, currentY, 523, rowHeight).fill(BG_LIGHT);
@@ -226,17 +276,10 @@ const generateInvoice = async (order, outputStream) => {
         // Bottom border
         doc.moveTo(36, currentY + rowHeight).lineTo(559, currentY + rowHeight).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
 
-        const itemPrice = Number(item.price) || 0;
-        const itemQty = Number(item.quantity) || 1;
-        const taxableVal = itemPrice * itemQty;
-        const itemTax = +(taxableVal * 0.18).toFixed(2);
-        const itemTotal = +(taxableVal + itemTax).toFixed(2);
-        const hsn = getHsnCode(item);
-
         doc.fillColor(DARK).fontSize(7.5).font('Helvetica');
         doc.text(String(index + 1), 42, currentY + 6, { width: 18 });
 
-        // Product Name (truncated cleanly)
+        // Product Name (cleanly truncated)
         const nameText = item.name ? (item.name.length > 34 ? item.name.slice(0, 32) + '...' : item.name) : 'Product Item';
         doc.font('Helvetica-Bold').text(nameText, 64, currentY + 4, { width: 170 });
         if (item.sku) {
@@ -244,12 +287,14 @@ const generateInvoice = async (order, outputStream) => {
         }
 
         doc.fillColor(DARK).fontSize(7.5).font('Helvetica');
-        doc.text(hsn, 238, currentY + 6, { width: 35, align: 'center' });
-        doc.text(String(itemQty), 278, currentY + 6, { width: 25, align: 'center' });
-        doc.text(`Rs. ${itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 308, currentY + 6, { width: 55, align: 'right' });
-        doc.text(`Rs. ${taxableVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 368, currentY + 6, { width: 60, align: 'right' });
-        doc.text(`Rs. ${itemTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 432, currentY + 6, { width: 55, align: 'right' });
-        doc.font('Helvetica-Bold').text(`Rs. ${itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 492, currentY + 6, { width: 60, align: 'right' });
+        doc.text(item.hsn, 238, currentY + 6, { width: 35, align: 'center' });
+        doc.text(String(item.itemQty), 278, currentY + 6, { width: 25, align: 'center' });
+        doc.text(`Rs. ${item.itemPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 308, currentY + 6, { width: 55, align: 'right' });
+        doc.text(`Rs. ${item.taxableVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 368, currentY + 6, { width: 60, align: 'right' });
+
+        const taxCellText = item.isExempt ? '0% (Exempt)' : `Rs. ${item.itemTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        doc.text(taxCellText, 432, currentY + 6, { width: 55, align: 'right' });
+        doc.font('Helvetica-Bold').text(`Rs. ${item.itemLineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 492, currentY + 6, { width: 60, align: 'right' });
 
         currentY += rowHeight;
       });
@@ -261,6 +306,14 @@ const generateInvoice = async (order, outputStream) => {
       const summaryLeftX = 36;
       const summaryRightX = 340;
       const summaryBoxW = 219;
+      const summarySectionHeight = 110;
+      const footerSectionHeight = 85;
+
+      // Check if Summary + Footer fits on current page
+      if (currentY + summarySectionHeight + footerSectionHeight > 760) {
+        doc.addPage();
+        currentY = 40;
+      }
 
       // Left Summary: Amount in Words & Payment Reference
       doc.fillColor(PRIMARY).fontSize(7.5).font('Helvetica-Bold').text('INVOICE AMOUNT IN WORDS:', summaryLeftX, currentY);
@@ -274,7 +327,7 @@ const generateInvoice = async (order, outputStream) => {
 
       const txnId = order.payment?.transactionId || (order.payment?.razorpayPaymentId || 'N/A');
       doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica')
-        .text(`Gateway Reference: Razorpay Cryptographic Settlement`, summaryLeftX + 8, pmtBoxY + 19)
+        .text('Gateway Reference: Razorpay Cryptographic Settlement', summaryLeftX + 8, pmtBoxY + 19)
         .text(`Transaction ID: ${txnId}`, summaryLeftX + 8, pmtBoxY + 29)
         .text(`Paid Timestamp: ${order.payment?.paidAt ? new Date(order.payment.paidAt).toLocaleString('en-IN') : invoiceDate}`, summaryLeftX + 8, pmtBoxY + 39);
 
@@ -286,11 +339,11 @@ const generateInvoice = async (order, outputStream) => {
 
       const totalsRows = [
         ['Taxable Subtotal:', `Rs. ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
+        discount > 0 ? ['Discount Applied (Pre-Tax):', `-Rs. ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null,
         isKarnataka ? ['Central GST (CGST @ 9%):', `Rs. ${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null,
         isKarnataka ? ['State GST (SGST @ 9%):', `Rs. ${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null,
-        !isKarnataka ? ['Integrated GST (IGST @ 18%):', `Rs. ${igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null,
-        ['Shipping & Handling:', shippingCost === 0 ? 'FREE' : `Rs. ${shippingCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
-        discount > 0 ? ['Discount Applied:', `-Rs. ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null
+        !isKarnataka ? ['Integrated GST (IGST):', `Rs. ${igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`] : null,
+        ['Shipping & Handling:', shippingCost === 0 ? 'FREE' : `Rs. ${shippingCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`]
       ].filter(Boolean);
 
       totalsRows.forEach(([lbl, val], idx) => {
@@ -310,7 +363,11 @@ const generateInvoice = async (order, outputStream) => {
       // ==========================================
       // 5. SIGNATORY & LEGAL DECLARATION FOOTER
       // ==========================================
-      const footerY = 690;
+      let footerY = Math.max(currentY + 115, 680);
+      if (footerY + 80 > 770) {
+        doc.addPage();
+        footerY = 40;
+      }
 
       // Authorized Signatory Box (Right)
       doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text('For E-Shop Retail Technologies Pvt. Ltd.', 370, footerY);
@@ -322,7 +379,7 @@ const generateInvoice = async (order, outputStream) => {
       doc.fillColor(PRIMARY).fontSize(7.5).font('Helvetica-Bold').text('TERMS & CONDITIONS / LEGAL DECLARATION:', 36, footerY);
       doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica')
         .text('1. We declare that this invoice shows the actual price of the goods described and all particulars are true and correct.', 36, footerY + 12)
-        .text('2. This is a computer-generated tax invoice issued in accordance with Section 31 of CGST Act, 2017. Does not require physical signature.', 36, footerY + 22)
+        .text('2. Computer-generated tax invoice issued in accordance with Section 31 of CGST Act, 2017. Trade discounts deducted per Section 15(3).', 36, footerY + 22)
         .text('3. In case of any query, contact our 24/7 E-Shop Concierge Desk with Order Reference number.', 36, footerY + 32)
         .text('4. Goods once sold can be returned within 7 days of delivery per E-Shop Standard Return Policy.', 36, footerY + 42)
         .text('5. All disputes are subject to the exclusive jurisdiction of courts in Bengaluru, Karnataka, India.', 36, footerY + 52);
@@ -330,7 +387,7 @@ const generateInvoice = async (order, outputStream) => {
       // Bottom copyright bar
       doc.moveTo(36, 770).lineTo(559, 770).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
       doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica')
-        .text('E-Shop Platform • Powered by React 19, Node.js & Machine Learning • Page 1 of 1', 36, 776, { width: 523, align: 'center' });
+        .text('E-Shop Platform • Powered by React 19, Node.js & Machine Learning • Digitally Generated GST Invoice', 36, 776, { width: 523, align: 'center' });
 
       doc.end();
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { authenticate, authorize } = require('../middlewares/auth');
 
 // 1. IMPORT validationSchemas HERE (This is critical!)
@@ -57,12 +58,24 @@ const memoryUpload = multer({
   }
 });
 
+// Dedicated rate limiter for AI visual search to prevent Gemini Vision quota starvation and DoS
+const visualSearchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 25, // 25 visual search requests per 15 minutes per IP
+  message: {
+    success: false,
+    message: 'Visual search limit exceeded. Please wait 15 minutes before submitting more images.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Public routes
 router.get('/', getProducts);
 router.get('/search', searchProducts);
 router.get('/featured', getFeaturedProducts);
 router.get('/category/:category', getProductsByCategory);
-router.post('/visual-search', memoryUpload.single('image'), handleVisualSearch);
+router.post('/visual-search', visualSearchLimiter, memoryUpload.single('image'), handleVisualSearch);
 router.get('/:id', getProduct);
 
 // Protected routes (Admin only)

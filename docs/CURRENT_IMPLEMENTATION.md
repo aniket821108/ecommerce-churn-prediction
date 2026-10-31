@@ -76,3 +76,13 @@ To ensure absolute technical honesty, every feature is audited against the actua
 3. **`IMPORTANT_INFORMATION/rzp-key.csv` (Exposed Secret File - User Retained):**
    - Plaintext CSV containing Razorpay Key ID and Secret residing in repo workspace per user retention requirement.
 
+
+---
+
+### 1.6 Newly Remediated Production Features (November 2026)
+
+| Sub-Feature | Verification Status | Code Evidence | Notes & Edge Cases |
+| :--- | :---: | :--- | :--- |
+| Multimodal AI Visual Search | **Implemented & Hardened** | `visualSearchService.js`, `productRoutes.js:65`, `VisualSearchModal.jsx` | Google Gemini Vision API; dedicated 25 req/15min rate limiting; optical character recognition (OCR) and token Jaccard similarity; zero disk upload leaks via memory storage. |
+| GST Tax Invoice Generator | **Implemented & Statutory** | `invoiceService.js`, `orderController.js`, `OrderDetail.jsx` | Compliant with Section 15(3) CGST Act (pre-tax trade discount deduction); 0% NIL rate for books (HSN 4901); Intrastate/Interstate tax bifurcation; QR code payload; dynamic multi-page A4 PDF flow. |
+| Live Delivery Map Simulation | **Implemented & Synchronized** | `LiveDeliveryMap.jsx`, `OrderDetail.jsx` | Leaflet 1.9 map with moving van marker and real-time ETA; guarded to active order states (`processing`, `shipped`, `delivered`); cancellation banner for cancelled orders; unmapped city demo disclosure pill. |

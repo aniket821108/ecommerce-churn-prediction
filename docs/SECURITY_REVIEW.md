@@ -10,6 +10,8 @@
 | **SEC-04** | Subprocess Concurrency DoS in Churn Inference | **HIGH** | **P1** | Confirmed | Node server memory crash (OOM) |
 | **SEC-05** | IDOR Risk in User Order Lookup Fallback | **LOW** | **P2** | Potential | Cross-tenant data leakage if query fails |
 | **SEC-06** | Incomplete Error Masking (Mongoose Uncaught 500s) | **LOW** | **P3** | Confirmed | Schema detail leakage in dev mode |
+| **SEC-07** | AI Visual Search Quota Exhaustion & DoS (CWE-770) | **HIGH** | **P0** | **RESOLVED** | Dedicated 25 req/15min rate limiting attached |
+| **SEC-08** | Invoice PDF Download Cross-Tenant IDOR (CWE-284) | **HIGH** | **P0** | **VERIFIED PASS** | Strict ownership + admin role authorization check |
 
 ---
 

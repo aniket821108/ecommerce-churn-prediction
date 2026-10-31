@@ -200,7 +200,7 @@ Represents finalized customer purchases and tracking lifecycle.
     - `paidAt` (Date)
   - `status` (String, enum: `['pending', 'processing', 'shipped', 'delivered', 'cancelled']`, default: `'pending'`, indexed)
   - `subtotal` (Number, required, min: 0)
-  - `tax` (Number, default: 0)
+  - `tax` (Number, default: 0 — statutory Indian GST computed per Section 15(3) of CGST Act: pre-tax trade discount deduction, 0% NIL rate for books under HSN 4901, and 18% standard rate for general goods)
   - `shippingCost` (Number, default: 0)
   - `discount` (Number, default: 0)
   - `total` (Number, required, min: 0)

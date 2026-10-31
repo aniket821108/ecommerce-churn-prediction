@@ -147,6 +147,40 @@ describe('Error Handling Middleware (backend/src/middlewares/errorHandler.js)', 
       process.env.NODE_ENV = originalEnv;
     });
 
+    it('should format MulterError LIMIT_FILE_SIZE as 400 operational error', () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      const mockRes = createMockRes();
+      const multerErr = new Error('File too large');
+      multerErr.name = 'MulterError';
+      multerErr.code = 'LIMIT_FILE_SIZE';
+      errorHandler(multerErr, { originalUrl: '/api/products/visual-search', method: 'POST' }, mockRes, () => {});
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(mockRes.body.success).toBe(false);
+      expect(mockRes.body.message).toContain('File size exceeds');
+      expect(mockRes.body.code).toBe('FILE_UPLOAD_ERROR');
+
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should format invalid file type error as 400 operational error', () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      const mockRes = createMockRes();
+      const typeErr = new Error('Invalid file type. Only JPEG, PNG, JPG, and WEBP images are allowed.');
+      errorHandler(typeErr, { originalUrl: '/api/products/visual-search', method: 'POST' }, mockRes, () => {});
+
+      expect(mockRes.statusCode).toBe(400);
+      expect(mockRes.body.success).toBe(false);
+      expect(mockRes.body.message).toContain('Invalid file type');
+      expect(mockRes.body.code).toBe('INVALID_FILE_TYPE');
+
+      process.env.NODE_ENV = originalEnv;
+    });
+
     it('should disguise non-operational programming errors with 500 in production mode', () => {
       const originalEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';

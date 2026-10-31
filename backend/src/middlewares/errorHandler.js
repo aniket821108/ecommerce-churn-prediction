@@ -80,6 +80,11 @@ const errorHandler = (err, req, res, next) => {
     error = handleJWTError();
   } else if (err.name === 'TokenExpiredError') {
     error = handleJWTExpiredError();
+  } else if (err.name === 'MulterError') {
+    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'File size exceeds maximum allowed limit (5MB)' : `File upload error: ${err.message}`;
+    error = new AppError(msg, 400, 'FILE_UPLOAD_ERROR');
+  } else if (err.message && err.message.toLowerCase().includes('invalid file type')) {
+    error = new AppError(err.message, 400, 'INVALID_FILE_TYPE');
   }
 
   error.statusCode = error.statusCode || err.statusCode || 500;

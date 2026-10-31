@@ -247,7 +247,39 @@ const OrderDetail = () => {
       </Card>
 
       {/* ── Live Delivery Map Simulation (Zomato / Swiggy Style) ── */}
-      <LiveDeliveryMap order={order} />
+      {['processing', 'shipped', 'delivered'].includes(order.status) && (
+        <LiveDeliveryMap order={order} />
+      )}
+
+      {/* ── Cancelled Order Dispatch Notice ── */}
+      {order.status === 'cancelled' && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-red-100 text-red-600 rounded-full mb-3">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h4 className="text-base font-bold text-red-900">Order Has Been Cancelled</h4>
+          <p className="text-xs text-red-600 max-w-md mx-auto mt-1">
+            This order was cancelled. Real-time delivery dispatch and route simulation are inactive.
+          </p>
+        </div>
+      )}
+
+      {/* ── Pending Order Dispatch Notice ── */}
+      {order.status === 'pending' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-amber-100 text-amber-700 rounded-full mb-3">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h4 className="text-base font-bold text-amber-900">Awaiting Order Processing</h4>
+          <p className="text-xs text-amber-700 max-w-md mx-auto mt-1">
+            Live delivery map and simulated turn-by-turn route tracking will activate once payment verification is finalized and items are dispatched from our fulfillment center.
+          </p>
+        </div>
+      )}
 
       {/* ── Order Items ── */}
       <Card title={`Items (${order.items?.length})`}>
