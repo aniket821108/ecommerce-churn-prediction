@@ -281,9 +281,13 @@ exports.handleVisualSearch = catchAsync(async (req, res, next) => {
 
   const products = await visualSearchService.findMatchingProducts(analysis, 12);
 
+  const message = analysis.isRetailProduct === false
+    ? 'No retail product detected in this image.'
+    : `Visual search identified: ${analysis.detectedItem || 'Product'}`;
+
   res.status(200).json({
     success: true,
-    message: `Visual search identified: ${analysis.detectedItem || 'Product'}`,
+    message,
     analysis,
     count: products.length,
     products

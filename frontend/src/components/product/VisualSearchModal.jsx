@@ -120,8 +120,10 @@ const VisualSearchModal = ({ isOpen, onClose }) => {
 
       if (data.products && data.products.length > 0) {
         toast.success(`Found ${data.products.length} matching products!`);
+      } else if (data.analysis?.isRetailProduct === false) {
+        toast('Uploaded image does not appear to be a retail product.', { icon: 'ℹ️' });
       } else {
-        toast('No direct product match found in catalog, showing top recommendations.', { icon: 'ℹ️' });
+        toast('No matching product found in our catalog for this image.', { icon: 'ℹ️' });
       }
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || 'Visual search failed.';
@@ -277,6 +279,11 @@ const VisualSearchModal = ({ isOpen, onClose }) => {
                   {/* Metadata Tags */}
                   {!loading && analysis && (
                     <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
+                      {analysis.visibleText && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200 line-clamp-1 max-w-[280px]" title={analysis.visibleText}>
+                          📖 "{analysis.visibleText}"
+                        </span>
+                      )}
                       {analysis.category && (
                         <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
                           📁 {analysis.category}
@@ -379,8 +386,38 @@ const VisualSearchModal = ({ isOpen, onClose }) => {
                     })}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-slate-400 text-xs">
-                    No matching products found. Try uploading a different angle or lighting.
+                  <div className="py-10 px-4 text-center rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                      <ShoppingBagIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">
+                        {analysis?.isRetailProduct === false
+                          ? 'Non-Product Image Detected'
+                          : 'No Direct Store Matches Found'}
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                        {analysis?.isRetailProduct === false
+                          ? 'This image doesn’t appear to be a consumer store product. Try uploading a photo of a book, clothing, shoe, or electronics item.'
+                          : `Gemini Vision identified "${analysis?.detectedItem || 'this item'}", but no closely matching products are currently available in inventory.`}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleReset}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs"
+                      >
+                        Try Another Image
+                      </button>
+                      <Link
+                        to="/shop"
+                        onClick={onClose}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
+                      >
+                        Browse Shop
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
@@ -406,3 +443,4 @@ const VisualSearchModal = ({ isOpen, onClose }) => {
 };
 
 export default VisualSearchModal;
+
