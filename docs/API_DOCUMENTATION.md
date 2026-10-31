@@ -54,6 +54,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/products` | Public | List products with pagination & filtering | `page`, `limit`, `category`, `minPrice`, `maxPrice`, `brand`, `search`, `featured`, `sort` |
 | `GET` | `/api/products/search` | Public | Full-text product search | `q` (search string) |
+| `POST` | `/api/products/visual-search` | Public | 🧠 Multimodal AI Visual Search: Analyzes uploaded photo via Google Gemini Vision, extracts OCR visible text & product attributes, and returns ranked inventory matches | `multipart/form-data`: `image` (JPEG/PNG/WEBP up to 5MB) |
 | `GET` | `/api/products/featured` | Public | Retrieve featured showcase products | `limit` (default: 10) |
 | `GET` | `/api/products/category/:category` | Public | Filter products by category enum | `category`, `limit` |
 | `GET` | `/api/products/:id` | Public | Retrieve detailed product specification | `:id` (MongoDB ObjectId) |
@@ -88,6 +89,7 @@
 | `POST` | `/api/orders/from-cart` | Customer Only (`user`) | Create order directly from active user cart | `shippingAddress`, `billingAddress`, `paymentMethod`, `notes` |
 | `GET` | `/api/orders/my-orders` | Customer Only (`user`) | List all historical orders for current user | Paginated / sorted `-createdAt` |
 | `GET` | `/api/orders/:id` | Customer Owner or Admin | Retrieve single order details | `:id` |
+| `GET` | `/api/orders/:id/invoice` | Customer Owner or Admin | 📄 Download Official GST Tax Invoice (PDF): Streams dynamically generated tax invoice with itemized 18% GST breakdown, HSN/SAC codes, and cryptographic verification QR code | `:id` |
 | `PUT` | `/api/orders/:id/cancel`| Customer Only (`user`) | Cancel order (allowed if `pending`/`processing`) | `{ "reason": "..." }` |
 | `POST` | `/api/orders/:id/razorpay/create` | Customer Only (`user`) | Generate server-side Razorpay order | Generates Razorpay order in paise, sets `razorpayOrderId` |
 | `POST` | `/api/orders/:id/razorpay/verify` | Customer Only (`user`) | Cryptographic HMAC-SHA256 payment verification | `{ "razorpay_payment_id", "razorpay_order_id", "razorpay_signature" }` |
