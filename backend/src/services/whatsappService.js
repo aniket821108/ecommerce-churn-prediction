@@ -154,9 +154,15 @@ const sendWhatsappMessage = async ({ phone, templateName = 'crmDeal', data = {} 
           twData || twErr.message
         );
 
-        if (twData?.code === 21654 || twData?.code === 63016 || twData?.code === 63007) {
+        if (twData?.code === 21654) {
           throw new Error(
-            `Twilio 24-Hour WhatsApp Session Expired: Please send "hi" from your WhatsApp (+${formattedPhone}) to ${fromNumber.replace('whatsapp:', '')} to re-open the 24-hour delivery session. Once sent, clicking "Confirm & Dispatch Deal" will deliver messages directly to your phone instantly!`
+            `Twilio Content Template Required (HX...): Twilio requires an approved ContentSid starting with "HX...". Please copy your template SID from Step 3 (Code sample) of your Twilio WhatsApp Tryout page and add TWILIO_CONTENT_SID=HX... in backend/src/.env.`
+          );
+        }
+
+        if (twData?.code === 63016 || twData?.code === 63007) {
+          throw new Error(
+            `Twilio 24-Hour WhatsApp Session Expired: Please send "hi" from your WhatsApp (+${formattedPhone}) to ${fromNumber.replace('whatsapp:', '')} to re-open the 24-hour delivery session.`
           );
         }
 
