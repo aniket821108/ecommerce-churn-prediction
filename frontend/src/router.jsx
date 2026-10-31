@@ -1,60 +1,119 @@
-import { createBrowserRouter, Outlet, Link } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { createBrowserRouter } from 'react-router-dom';
 import App from './App';
-import Home from './pages/Home';
-import Shop from './pages/Shop';
-import ProductDetail from './pages/ProductDetail';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import OtpVerify from './pages/OtpVerify'; // ✅ Import added
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import Profile from './pages/Profile';
-import Orders from './pages/Orders';
-import OrderDetail from './pages/OrderDetail';
-
-// Admin Imports
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminProducts from './pages/admin/ProductsManagement';
-import AdminOrders from './pages/admin/OrdersManagement';
-import AdminUsers from './pages/admin/UsersManagement';
-import AdminChurn from './pages/admin/ChurnAnalytics';
-import AdminLayout from './components/admin/AdminLayout';
+import PageFallback from './components/common/PageFallback';
+import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AdminRoute from './components/common/AdminRoute';
 import CustomerRoute from './components/common/CustomerRoute';
+
+// Helper to wrap lazy components in Suspense with fallback
+const withSuspense = (Component) => (
+  <Suspense fallback={<PageFallback />}>
+    <Component />
+  </Suspense>
+);
+
+// ── Lazy Loaded Public Pages ─────────────────────────────────
+const Home = lazy(() => import('./pages/Home'));
+const Shop = lazy(() => import('./pages/Shop'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Cart = lazy(() => import('./pages/Cart'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const OtpVerify = lazy(() => import('./pages/OtpVerify'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Orders = lazy(() => import('./pages/Orders'));
+const OrderDetail = lazy(() => import('./pages/OrderDetail'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+// ── Lazy Loaded Admin Pages ──────────────────────────────────
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminProducts = lazy(() => import('./pages/admin/ProductsManagement'));
+const AdminOrders = lazy(() => import('./pages/admin/OrdersManagement'));
+const AdminUsers = lazy(() => import('./pages/admin/UsersManagement'));
+const AdminChurn = lazy(() => import('./pages/admin/ChurnAnalytics'));
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
+    errorElement: <RouteErrorBoundary />,
     children: [
-      { index: true, element: <Home /> },
-      { path: 'shop', element: <Shop /> },
-      { path: 'product/:id', element: <ProductDetail /> },
-      { path: 'cart', element: <CustomerRoute requireAuth><Cart /></CustomerRoute> },
-      { path: 'checkout', element: <CustomerRoute requireAuth><Checkout /></CustomerRoute> },
-      { path: 'login', element: <Login /> },
-      { path: 'register', element: <Register /> },
-      { path: 'verify-otp', element: <OtpVerify /> }, // ✅ Route added
-      { path: 'forgot-password', element: <ForgotPassword /> },
-      { path: 'reset-password', element: <ResetPassword /> },
-      { path: 'reset-password/:token', element: <ResetPassword /> },
-      { path: 'profile', element: <ProtectedRoute><Profile /></ProtectedRoute> },
-      { path: 'orders', element: <CustomerRoute requireAuth><Orders /></CustomerRoute> },
-      { path: 'orders/:id', element: <ProtectedRoute><OrderDetail /></ProtectedRoute> },
-    ]
+      { index: true, element: withSuspense(Home) },
+      { path: 'shop', element: withSuspense(Shop) },
+      { path: 'product/:id', element: withSuspense(ProductDetail) },
+      {
+        path: 'cart',
+        element: (
+          <CustomerRoute requireAuth>
+            {withSuspense(Cart)}
+          </CustomerRoute>
+        ),
+      },
+      {
+        path: 'checkout',
+        element: (
+          <CustomerRoute requireAuth>
+            {withSuspense(Checkout)}
+          </CustomerRoute>
+        ),
+      },
+      { path: 'login', element: withSuspense(Login) },
+      { path: 'register', element: withSuspense(Register) },
+      { path: 'verify-otp', element: withSuspense(OtpVerify) },
+      { path: 'forgot-password', element: withSuspense(ForgotPassword) },
+      { path: 'reset-password', element: withSuspense(ResetPassword) },
+      { path: 'reset-password/:token', element: withSuspense(ResetPassword) },
+      {
+        path: 'profile',
+        element: (
+          <ProtectedRoute>
+            {withSuspense(Profile)}
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'orders',
+        element: (
+          <CustomerRoute requireAuth>
+            {withSuspense(Orders)}
+          </CustomerRoute>
+        ),
+      },
+      {
+        path: 'orders/:id',
+        element: (
+          <ProtectedRoute>
+            {withSuspense(OrderDetail)}
+          </ProtectedRoute>
+        ),
+      },
+      // 404 Catch-All Wildcard Route
+      { path: '*', element: withSuspense(NotFound) },
+    ],
   },
   {
     path: 'admin',
-    element: <AdminRoute><AdminLayout /></AdminRoute>,
+    element: (
+      <AdminRoute>
+        {withSuspense(AdminLayout)}
+      </AdminRoute>
+    ),
+    errorElement: <RouteErrorBoundary />,
     children: [
-      { index: true, element: <AdminDashboard /> },
-      { path: 'products', element: <AdminProducts /> },
-      { path: 'orders', element: <AdminOrders /> },
-      { path: 'users', element: <AdminUsers /> },
-      { path: 'churn', element: <AdminChurn /> },
-    ]
-  }
+      { index: true, element: withSuspense(AdminDashboard) },
+      { path: 'products', element: withSuspense(AdminProducts) },
+      { path: 'orders', element: withSuspense(AdminOrders) },
+      { path: 'users', element: withSuspense(AdminUsers) },
+      { path: 'churn', element: withSuspense(AdminChurn) },
+      { path: '*', element: withSuspense(NotFound) },
+    ],
+  },
 ]);
+
+export default router;

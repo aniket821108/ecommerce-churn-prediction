@@ -16,5 +16,25 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/ml/, ''),
       }
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('leaflet')) {
+              return 'vendor-leaflet';
+            }
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            if (id.includes('@heroicons')) {
+              return 'vendor-icons';
+            }
+          }
+        }
+      }
+    }
   }
 })

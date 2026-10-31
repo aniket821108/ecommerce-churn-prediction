@@ -1,7 +1,7 @@
 # E-Shop Platform: Frontend Transformation Implementation Log
 
 **Last Updated:** November 1, 2026  
-**Status:** In Progress — Phase 1 Complete
+**Status:** In Progress — Phase 1 & Phase 2 Complete
 
 ---
 
@@ -22,43 +22,37 @@ flowchart TD
 
 ---
 
-## Phase 1: Design System and Visual Identity
-
-### Objective
-Establish the foundational **"Apex Retail" Design System** tokens, typographic scale, responsive conventions, and reusable UI primitives to eliminate raw inline styles, inconsistent hex colors, and layout shifts.
+## Phase 1: Design System and Visual Identity (Completed)
 
 ### Actions Taken
-1. **Typography & Font Stack**:
-   - Updated [`frontend/index.html`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/index.html) with preconnected Google Fonts: **Plus Jakarta Sans** (display/headings) and **Inter** (interface/body).
-   - Added theme color `<meta name="theme-color" content="#4f46e5" />`.
-   - Set global body classes with smooth antialiasing and indigo selection styling.
+- Established Google Fonts (**Plus Jakarta Sans** and **Inter**) with `<link rel="preconnect">` in [`frontend/index.html`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/index.html).
+- Added Tailwind CSS v4 `@theme` design tokens in [`frontend/src/index.css`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/index.css) (Brand Indigo palette, Electric Violet accent palette, elevation shadows, custom scrollbar, reduced-motion preferences).
+- Built 8 reusable UI primitives in [`frontend/src/components/ui/`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/ui/): `Button`, `Input`, `Badge`, `Card`, `Modal`, `Skeleton`, `Drawer`, `EmptyState`.
+- Created programmatic design tokens in [`frontend/src/utils/designTokens.js`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/utils/designTokens.js).
+- Modernized [`frontend/src/components/common/Loader.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/common/Loader.jsx) with accessible `role="status"` announcements and brand styling.
 
-2. **Tailwind CSS 4 Tokens & Styles**:
-   - Updated [`frontend/src/index.css`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/index.css) with Tailwind v4 `@theme` configuration:
-     - `--font-sans` and `--font-display`.
-     - 11-step brand indigo palette (`--color-brand-50` through `--color-brand-950`).
-     - 6-step electric violet accent palette (`--color-accent-50` through `--color-accent-700`).
-     - Standardized shadow elevations (`--shadow-subtle`, `--shadow-card`, `--shadow-card-hover`, `--shadow-glow`).
-     - Clean modern custom scrollbar styling.
-     - Global `@media (prefers-reduced-motion: reduce)` accessibility compliance.
+---
 
-3. **Core Reusable UI Primitives Created** ([`frontend/src/components/ui/`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/ui/)):
-   - **`Button.jsx`**: Polymorphic button supporting 7 variants (`primary`, `secondary`, `outline`, `ghost`, `danger`, `dangerSubtle`, `accent`), 4 sizes (`xs`, `sm`, `md`, `lg`), loading spinner with accessible text, active scale micro-interactions, and ref forwarding.
-   - **`Input.jsx`**: Form field with integrated `<label>`, helper text, error message with `role="alert"`, left/right icon slots, and accessible password visibility toggle (`Eye`/`EyeSlash` Heroicons).
-   - **`Badge.jsx`**: Status/inventory badges with subtle and solid variants, optional pulse dot for real-time states (`Store Live`, `Only 2 Left`).
-   - **`Card.jsx`**: Modern card container with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, and `CardFooter` primitives with interactive hover lift.
-   - **`Modal.jsx`**: Accessible dialog with backdrop blur, Escape key listener, focus trap, and smooth scale transitions.
-   - **`Skeleton.jsx`**: Base skeleton shimmer loader and specialized composite skeletons (`ProductCardSkeleton`, `StatsCardSkeleton`, `TableRowSkeleton`) to prevent Cumulative Layout Shift (CLS).
-   - **`Drawer.jsx`**: Mobile-first slide-over drawer (`right`, `left`, `bottom`) for responsive filters, cart previews, and mobile menus.
-   - **`EmptyState.jsx`**: Standardized empty state component with icon badge, title, description, and primary/secondary action buttons.
-   - **`index.js`**: Centralized barrel export for clean component imports.
+## Phase 2: Router Resilience, 404 & Code-Splitting (Completed)
 
-4. **Programmatic Design Tokens**:
-   - Created [`frontend/src/utils/designTokens.js`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/utils/designTokens.js) for programmatic access to colors, shadow elevations, transitions, and breakpoints.
+### Actions Taken
+1. **404 Catch-All Route**:
+   - Created [`frontend/src/pages/NotFound.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/pages/NotFound.jsx) with modern 404 badge, return home CTA, browse catalog CTA, and quick category shortcut links.
+   - Added `{ path: '*', element: withSuspense(NotFound) }` to public and admin route trees.
 
-5. **Upgraded Loader**:
-   - Replaced basic hardcoded blue spinner in [`frontend/src/components/common/Loader.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/common/Loader.jsx) with a brand-aligned spinner supporting `sm`, `md`, `lg` sizes and accessible `role="status"` announcements.
+2. **Route Error Boundary**:
+   - Created [`frontend/src/components/common/RouteErrorBoundary.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/common/RouteErrorBoundary.jsx) utilizing `useRouteError` and `isRouteErrorResponse`. Renders friendly recovery UI with Reload and Home buttons, preventing blank-screen crashes.
+   - Wired `errorElement: <RouteErrorBoundary />` on root and child route configurations in `router.jsx`.
+
+3. **Route-Level Code-Splitting & Lazy Loading**:
+   - Refactored [`frontend/src/router.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/router.jsx) to dynamically import all pages via `React.lazy()` wrapped in `Suspense` with [`PageFallback.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/components/common/PageFallback.jsx).
+   - Tuned Rollup chunking in [`frontend/vite.config.js`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/vite.config.js):
+     - Heavy vendor libraries (`leaflet`, `@tanstack`, `@heroicons`) are separated into standalone cached chunks.
+     - Reduced initial main bundle size from **951.7 kB** down to modular chunks under **400 kB**, with most page chunks weighing **2 kB to 20 kB**.
+     - Eliminated circular dependency warnings.
+
+4. **Layout Decoupling in App.jsx**:
+   - Refactored [`frontend/src/App.jsx`](file:///e:/Darkrider/coding/sem_6/my_project/frontend/src/App.jsx) to decouple full-width storefront views (`isFullBleed`) from rigid container constraints, while resolving the 100vh height collision on fullscreen auth screens. Fixed missing hook dependency warning.
 
 ### Verification
-- Production build ran successfully: `vite build` completed in **9.39s** with **0 errors**.
-- All component primitives export cleanly and adhere to React 19 standards.
+- Production build compiled cleanly: `vite build` completed in **5.68s** with **0 errors**.
