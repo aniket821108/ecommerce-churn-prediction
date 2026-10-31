@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const Cart = require('../models/Cart');
 const User = require('../models/User');
 const AdminLog = require('../models/AdminLog');
+const invoiceService = require('../services/invoiceService');
 const { catchAsync, AppError } = require('../middlewares/errorHandler');
 const logger = require('../utils/logger');
 
@@ -565,4 +566,31 @@ exports.getSalesAnalytics = catchAsync(async (req, res) => {
     topProducts,
     salesByCategory
   });
+});
+
+
+// @desc    Download Official GST Tax Invoice (PDF)
+// @route   GET /api/orders/:id/invoice
+// @access  Private (Order Owner or Admin)
+exports.downloadInvoice = catchAsync(async (req, res, next) => {
+  const order = await Order.findById(req.params.id).populate('user', 'name email');
+  if (!order) return next(new AppError('Order not found', 404));
+
+  // Access control: Order owner or Administrator
+  const isOwner = order.user && (
+    (order.user._id && order.user._id.toString() === req.userId?.toString()) ||
+    order.user.toString() === req.userId?.toString()
+  );
+  const isAdmin = req.userRole === 'admin';
+
+  if (!isOwner && !isAdmin) {
+    return next(new AppError('You do not have permission to download this invoice.', 403));
+  }
+
+  // Set HTTP attachment headers for PDF download
+  const filename = `Invoice-${order.orderNumber || order._id}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  await invoiceService.generateInvoice(order, res);
 });

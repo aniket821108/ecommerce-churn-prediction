@@ -11,7 +11,8 @@ const {
   updateOrderStatus,
   updatePaymentStatus,
   cancelOrder,
-  getSalesAnalytics
+  getSalesAnalytics,
+  downloadInvoice
 } = require('../controllers/orderController');
 
 const paymentService = require('../services/paymentService');
@@ -97,6 +98,9 @@ router.post('/:id/razorpay/verify', authenticate, authorize('user'), catchAsync(
 /* =========================================
    GENERIC ROUTES (Must come LAST)
 ========================================= */
+
+// Official GST Tax Invoice Download (PDF)
+router.get('/:id/invoice', authenticate, downloadInvoice);
 
 router.get('/:id', authenticate, getOrder);
 router.put('/:id/cancel', authenticate, authorize('user'), cancelOrder);

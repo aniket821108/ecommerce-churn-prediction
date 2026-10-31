@@ -112,6 +112,7 @@ const OrderDetail = () => {
   const queryClient = useQueryClient();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['order', id],
@@ -128,6 +129,31 @@ const OrderDetail = () => {
     },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to cancel order'),
   });
+
+  const handleDownloadInvoice = async () => {
+    try {
+      setDownloadingInvoice(true);
+      toast.loading('Generating official GST tax invoice...', { id: 'invoice-download' });
+
+      const response = await orderService.downloadInvoice(id);
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Invoice-${order?.orderNumber || id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Official GST Tax Invoice downloaded!', { id: 'invoice-download' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download tax invoice.', { id: 'invoice-download' });
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
 
   const order = data?.data?.order;
 
@@ -160,8 +186,35 @@ const OrderDetail = () => {
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">Placed on {formatDate(order.createdAt)}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <StatusBadge status={order.status} />
+
+          {/* Official GST Tax Invoice Download Button */}
+          <button
+            type="button"
+            onClick={handleDownloadInvoice}
+            disabled={downloadingInvoice}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 transition-all shadow-2xs hover:shadow-xs disabled:opacity-50 cursor-pointer"
+            title="Download Official GST Tax Invoice with QR Code"
+          >
+            {downloadingInvoice ? (
+              <>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span>Generating PDF...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Download GST Invoice</span>
+              </>
+            )}
+          </button>
+
           {canCancel && (
             <button
               onClick={() => setShowCancelConfirm(true)}
@@ -274,6 +327,17 @@ const OrderDetail = () => {
                 <span className="text-xs font-mono text-gray-600">{order.payment.transactionId}</span>
               </div>
             )}
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
+              <span className="text-sm text-gray-500">Official GST Invoice</span>
+              <button
+                type="button"
+                onClick={handleDownloadInvoice}
+                disabled={downloadingInvoice}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                📄 Download PDF
+              </button>
+            </div>
           </div>
         </Card>
       </div>

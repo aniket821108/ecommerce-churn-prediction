@@ -6,6 +6,7 @@ export const orderService = {
   getMyOrders: () => api.get('/orders/my-orders'),
   getOrder: (id) => api.get(`/orders/${id}`),
   cancelOrder: (id, reason) => api.put(`/orders/${id}/cancel`, { reason }),
+  downloadInvoice: (id) => api.get(`/orders/${id}/invoice`, { responseType: 'blob' }),
 
   // Razorpay
   createRazorpayOrder: (orderId) => api.post(`/orders/${orderId}/razorpay/create`),
