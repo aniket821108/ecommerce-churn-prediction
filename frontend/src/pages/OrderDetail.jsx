@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import Loader from '../components/common/Loader';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import toast from 'react-hot-toast';
+import LiveDeliveryMap from '../components/delivery/LiveDeliveryMap';
 
 // ── Status system ─────────────────────────────────────────
 const statusMap = {
@@ -244,6 +245,9 @@ const OrderDetail = () => {
           </div>
         )}
       </Card>
+
+      {/* ── Live Delivery Map Simulation (Zomato / Swiggy Style) ── */}
+      <LiveDeliveryMap order={order} />
 
       {/* ── Order Items ── */}
       <Card title={`Items (${order.items?.length})`}>
