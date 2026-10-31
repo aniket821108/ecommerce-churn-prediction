@@ -1001,7 +1001,7 @@ const processCustomerFallback = async ({ message, user, userId }) => {
 
   // 4. Pure Friendly Greeting Check (BEFORE catalog search to prevent matching random words)
   const isPureGreeting =
-    /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|howdy|namaste|sup|yo|who are you|what can you do)\b/i.test(text.trim()) &&
+    /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening)|howdy|namaste|sup|yo|who are you|what can you do|how are you|how r u|kaise ho)\b/i.test(text.trim()) &&
     !category &&
     !underPriceMatch &&
     !text.includes('buy') &&
@@ -1012,6 +1012,19 @@ const processCustomerFallback = async ({ message, user, userId }) => {
     !text.includes('offer');
 
   if (isPureGreeting || text === '') {
+    if (text.includes('how are you') || text.includes('how r u') || text.includes('kaise ho')) {
+      return {
+        reply: `I'm doing great, thank you for asking! 😊 I'm your **E-Shop AI Assistant**. How can I help you with your shopping today?`,
+        products: [],
+        suggestions: [
+          'Find running shoes under ₹2,000',
+          'Where is my order?',
+          'Best deals today',
+          'What is your return policy?'
+        ]
+      };
+    }
+
     const featuredResult = await searchCatalogTool({ featuredOnly: true, limit: 3 });
     return {
       reply: `Hello${user?.name ? ' ' + user.name.split(' ')[0] : ''}! 👋 I'm your **E-Shop AI Shopping Assistant**.\n\n` +
