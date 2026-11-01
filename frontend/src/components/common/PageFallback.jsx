@@ -17,3 +17,4 @@ export const PageFallback = () => {
 };
 
 export default PageFallback;
+

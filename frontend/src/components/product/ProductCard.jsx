@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import useCartStore from '../../store/cartStore';
 import useAuthStore from '../../store/authStore';
+import { Badge } from '../ui/Badge';
 import toast from 'react-hot-toast';
 
 const ProductCard = ({ product, index = 0 }) => {
@@ -14,21 +15,19 @@ const ProductCard = ({ product, index = 0 }) => {
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
-    if (!isAuthenticated) {
-      toast.error('Please sign in to add items to your cart');
-      navigate('/login');
-      return;
-    }
     if (isAdmin) {
       toast.error('Admins cannot purchase products. Please use a customer account.');
       return;
     }
     if (adding) return;
     setAdding(true);
-    await addItem(product._id, 1);
-    setAdding(false);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1800);
+    try {
+      await addItem(product, 1);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1800);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const discountPercent =
@@ -41,67 +40,58 @@ const ProductCard = ({ product, index = 0 }) => {
 
   return (
     <div
-      className="group relative bg-white rounded-2xl overflow-hidden flex flex-col"
+      className="group relative bg-white rounded-2xl border border-slate-100/80 overflow-hidden flex flex-col font-sans transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
       style={{
-        boxShadow: '0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)',
-        transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-        animationDelay: `${index * 60}ms`,
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.08)';
-        e.currentTarget.style.transform = 'translateY(-4px)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)';
-        e.currentTarget.style.transform = 'translateY(0)';
+        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
       }}
     >
       {/* ── Image Container ── */}
-      <Link to={`/product/${product._id}`} className="relative overflow-hidden block bg-gray-50">
+      <Link to={`/product/${product._id}`} className="relative overflow-hidden block bg-slate-50 aspect-square sm:aspect-4/3">
         <img
           src={product.images?.[0]?.url || '/placeholder.png'}
           alt={product.name}
-          className="w-full h-56 sm:h-52 lg:h-56 object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+          loading="lazy"
+          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
         />
 
         {/* Overlay gradient on hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
         {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5 z-10">
           {discountPercent && (
-            <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">
+            <Badge variant="danger" size="sm" className="font-black shadow-xs">
               -{discountPercent}%
-            </span>
+            </Badge>
           )}
           {isOutOfStock && (
-            <span className="bg-gray-800 text-white text-xs font-semibold px-2 py-0.5 rounded-full shadow-sm">
+            <Badge variant="default" size="sm" className="bg-slate-900 text-white font-bold shadow-xs">
               Sold Out
-            </span>
+            </Badge>
           )}
           {isLowStock && !isOutOfStock && (
-            <span className="bg-amber-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full shadow-sm">
+            <Badge variant="warning" size="sm" className="font-bold shadow-xs">
               Only {product.stock} left
-            </span>
+            </Badge>
           )}
         </div>
 
-        {/* Quick action button slides up on hover */}
-        <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out px-3 pb-3">
+        {/* Quick action button slides up on desktop hover */}
+        <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out p-2.5 hidden sm:block z-10">
           {isAdmin ? (
-            <span className="block w-full py-2 text-center rounded-xl text-xs font-bold bg-violet-600/90 text-white backdrop-blur-sm shadow-lg">
+            <span className="block w-full py-2 text-center rounded-xl text-xs font-bold bg-violet-600/90 text-white backdrop-blur-md shadow-md">
               Admin View
             </span>
           ) : (
             <button
               onClick={handleAddToCart}
               disabled={adding || isOutOfStock}
-              className={`w-full py-2 rounded-xl text-sm font-semibold backdrop-blur-sm transition-all duration-200 shadow-lg
+              className={`w-full py-2 rounded-xl text-xs font-bold backdrop-blur-md transition-all duration-200 shadow-md
                 ${isOutOfStock
-                  ? 'bg-gray-400/80 text-white cursor-not-allowed'
+                  ? 'bg-slate-400/80 text-white cursor-not-allowed'
                   : added
-                  ? 'bg-emerald-500/90 text-white'
-                  : 'bg-white/90 text-gray-900 hover:bg-white'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white/95 text-slate-900 hover:bg-white hover:text-indigo-600'
                 }`}
             >
               {isOutOfStock ? 'Out of Stock' : adding ? 'Adding…' : added ? '✓ Added to Cart' : 'Quick Add'}
@@ -111,17 +101,17 @@ const ProductCard = ({ product, index = 0 }) => {
       </Link>
 
       {/* ── Card Body ── */}
-      <div className="flex flex-col flex-1 p-4 gap-2">
+      <div className="flex flex-col flex-1 p-3 sm:p-4 gap-1.5 sm:gap-2">
         {/* Brand */}
         {product.brand && (
-          <span className="text-xs font-semibold uppercase tracking-widest text-indigo-500">
+          <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600 truncate">
             {product.brand}
           </span>
         )}
 
         {/* Product Name */}
         <Link to={`/product/${product._id}`}>
-          <h3 className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 hover:text-indigo-600 transition-colors duration-200">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug line-clamp-2 hover:text-indigo-600 transition-colors duration-200">
             {product.name}
           </h3>
         </Link>
@@ -133,10 +123,10 @@ const ProductCard = ({ product, index = 0 }) => {
               {[1, 2, 3, 4, 5].map((star) => (
                 <svg
                   key={star}
-                  className={`w-3.5 h-3.5 ${
+                  className={`w-3 sm:w-3.5 h-3 sm:h-3.5 ${
                     star <= Math.round(product.ratings.average)
                       ? 'text-amber-400'
-                      : 'text-gray-200'
+                      : 'text-slate-200'
                   }`}
                   fill="currentColor"
                   viewBox="0 0 20 20"
@@ -145,7 +135,7 @@ const ProductCard = ({ product, index = 0 }) => {
                 </svg>
               ))}
             </div>
-            <span className="text-xs text-gray-400">
+            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
               {product.ratings.average.toFixed(1)}
               {product.ratings.count > 0 && ` (${product.ratings.count})`}
             </span>
@@ -156,25 +146,27 @@ const ProductCard = ({ product, index = 0 }) => {
         <div className="flex-1" />
 
         {/* Price Row */}
-        <div className="flex items-end justify-between mt-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-gray-900">₹{product.price.toLocaleString('en-IN')}</span>
+        <div className="flex items-end justify-between pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
+            <span className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+              ₹{product.price.toLocaleString('en-IN')}
+            </span>
             {product.compareAtPrice && product.compareAtPrice > product.price && (
-              <span className="text-xs text-gray-400 line-through">
+              <span className="text-[10px] sm:text-xs text-slate-400 line-through">
                 ₹{product.compareAtPrice.toLocaleString('en-IN')}
               </span>
             )}
           </div>
 
-          {/* Desktop Add to Cart */}
+          {/* Desktop Add to Cart Pill */}
           <button
             onClick={handleAddToCart}
             disabled={adding || isOutOfStock}
-            className={`hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200
+            className={`hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200
               ${isOutOfStock
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 : added
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-emerald-600 text-white'
                 : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white'
               }`}
           >
@@ -194,11 +186,11 @@ const ProductCard = ({ product, index = 0 }) => {
         <button
           onClick={handleAddToCart}
           disabled={adding || isOutOfStock}
-          className={`sm:hidden w-full py-2 rounded-xl text-sm font-semibold transition-all duration-200 mt-1
+          className={`sm:hidden w-full py-2 rounded-xl text-xs font-bold transition-all duration-200 mt-1
             ${isOutOfStock
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : added
-              ? 'bg-emerald-500 text-white'
+              ? 'bg-emerald-600 text-white'
               : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
             }`}
         >

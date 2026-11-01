@@ -11,16 +11,30 @@ import BillingAddress from '../components/checkout/BillingAddress';
 import PaymentMethod from '../components/checkout/PaymentMethod';
 import OrderSummary from '../components/checkout/OrderSummary';
 import Loader from '../components/common/Loader';
+import { Button } from '../components/ui/Button';
 import toast from 'react-hot-toast';
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  LockClosedIcon,
+  MapPinIcon,
+  CreditCardIcon,
+  ShieldCheckIcon,
+  BoltIcon,
+  BanknotesIcon,
+  PencilSquareIcon,
+} from '@heroicons/react/24/outline';
 
 const checkoutSchema = z.object({
   shippingAddress: z.object({
-    street: z.string().min(1, 'Street address is required'),
-    city: z.string().min(1, 'City is required'),
-    state: z.string().min(1, 'State is required'),
-    zipCode: z.string().length(6, 'ZIP code must be 6 digits'),
+    street: z.string().trim().min(3, 'Street address must be at least 3 characters'),
+    city: z.string().trim().min(2, 'City is required'),
+    state: z.string().trim().min(2, 'State is required'),
+    zipCode: z.string().trim().regex(/^\d{6}$/, 'PIN code must be exactly 6 digits'),
     country: z.string().min(1, 'Country is required').default('India'),
-    phone: z.string().length(10, 'Phone must be 10 digits'),
+    phone: z.string().trim().regex(/^\d{10}$/, 'Phone number must be exactly 10 digits'),
   }),
   billingAddress: z.object({
     street: z.string().optional(),
@@ -33,10 +47,13 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
 });
 
-// ── Load Razorpay script dynamically ─────────────────────
+// Load Razorpay checkout script
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return; }
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.onload = () => resolve(true);
@@ -45,29 +62,39 @@ const loadRazorpayScript = () => {
   });
 };
 
-const STEPS = ['Shipping', 'Billing', 'Payment', 'Review'];
+const WIZARD_STEPS = [
+  { id: 1, key: 'shipping', label: 'Shipping Address' },
+  { id: 2, key: 'payment', label: 'Payment Method' },
+  { id: 3, key: 'review', label: 'Review & Confirm' },
+];
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { items, fetchCart, clearCart } = useCartStore();
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Admin guard: Admins cannot shop or checkout
   useEffect(() => {
     if (user?.role === 'admin') {
-      toast.error('Admin accounts cannot place orders.');
+      toast.error('Admin accounts cannot place customer orders.');
       navigate('/admin');
       return;
     }
     fetchCart();
   }, [user, navigate, fetchCart]);
 
+  // Empty cart guard
   useEffect(() => {
-    if (user?.role !== 'admin' && items.length === 0 && !loading) navigate('/cart');
+    if (user?.role !== 'admin' && items.length === 0 && !loading) {
+      navigate('/cart');
+    }
   }, [items, navigate, loading, user?.role]);
 
   const methods = useForm({
     resolver: zodResolver(checkoutSchema),
+    mode: 'onTouched',
     defaultValues: {
       shippingAddress: {
         street: user?.address?.street || '',
@@ -78,12 +105,32 @@ const Checkout = () => {
         phone: user?.phone || '',
       },
       billingAddress: {},
-      paymentMethod: 'cash_on_delivery',
+      paymentMethod: 'razorpay',
       notes: '',
     },
   });
 
-  // ── COD Checkout ──────────────────────────────────────
+  // Step 1 Validation & Progression
+  const handleProceedToPayment = async () => {
+    const isStep1Valid = await methods.trigger('shippingAddress');
+    if (isStep1Valid) {
+      setCurrentStep(2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      toast.error('Please complete all required shipping fields accurately.');
+    }
+  };
+
+  // Step 2 Validation & Progression
+  const handleProceedToReview = async () => {
+    const isPaymentValid = await methods.trigger('paymentMethod');
+    if (isPaymentValid) {
+      setCurrentStep(3);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // ── COD Order Placement ──────────────────────────────────
   const handleCOD = async (data) => {
     const orderData = {
       shippingAddress: data.shippingAddress,
@@ -97,22 +144,22 @@ const Checkout = () => {
     navigate(`/orders/${response.data.order._id}`);
   };
 
-  // ── Razorpay Checkout ─────────────────────────────────
+  // ── Razorpay Order Placement with HMAC Verification ─────
   const handleRazorpay = async (data) => {
-    // 1. Load Razorpay script
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) {
-      toast.error('Failed to load payment gateway. Please try again.');
+      toast.error('Failed to load Razorpay payment gateway. Please retry.');
       return;
     }
 
-    // 2. Create order on backend first
     const orderData = {
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress?.street ? data.billingAddress : data.shippingAddress,
       paymentMethod: 'razorpay',
       notes: data.notes,
     };
+
+    // 1. Create order on backend (reserves inventory atomically)
     const orderResponse = await orderService.createFromCart(orderData);
     const order = orderResponse.data.order;
 
@@ -120,12 +167,12 @@ const Checkout = () => {
     const rzpOrderResponse = await orderService.createRazorpayOrder(order._id);
     const rzpData = rzpOrderResponse.data;
 
-    // 3. Open Razorpay popup with verified server order_id
+    // 3. Open Razorpay checkout modal
     const options = {
       key: rzpData.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: Math.round(order.total * 100),
       currency: 'INR',
-      name: 'E-Shop',
+      name: 'E-Shop Platform',
       description: `Order #${order.orderNumber}`,
       order_id: rzpData.orderId,
       prefill: {
@@ -136,14 +183,14 @@ const Checkout = () => {
       theme: { color: '#4f46e5' },
       modal: {
         ondismiss: () => {
-          toast.error('Payment window closed. You can retry from your orders.');
+          toast.error('Payment cancelled. You can retry from your orders page.');
           setLoading(false);
           navigate(`/orders/${order._id}`);
         },
       },
       handler: async (razorpayResponse) => {
         try {
-          // Cryptographic HMAC-SHA256 signature verification on backend
+          // Cryptographic HMAC-SHA256 verification on backend
           await orderService.verifyRazorpayPayment(order._id, {
             razorpay_payment_id: razorpayResponse.razorpay_payment_id,
             razorpay_order_id: razorpayResponse.razorpay_order_id,
@@ -153,7 +200,7 @@ const Checkout = () => {
           await clearCart();
           navigate(`/orders/${order._id}`);
         } catch (err) {
-          toast.error(err.response?.data?.message || 'Payment verification failed. Contact support.');
+          toast.error(err.response?.data?.message || 'Payment verification failed.');
           navigate(`/orders/${order._id}`);
         }
       },
@@ -168,7 +215,7 @@ const Checkout = () => {
     rzp.open();
   };
 
-  // ── Main submit handler ───────────────────────────────
+  // Main Submit Handler
   const onSubmit = async (data) => {
     setLoading(true);
     try {
@@ -186,116 +233,291 @@ const Checkout = () => {
 
   if (items.length === 0) return <Loader />;
 
-  return (
-    <div className="max-w-6xl mx-auto pb-16 space-y-8">
+  const formValues = methods.watch();
+  const selectedPaymentMethod = formValues.paymentMethod;
 
-      {/* Header */}
+  return (
+    <div className="max-w-6xl mx-auto pb-20 space-y-8 font-sans">
+      {/* ── Page Header ── */}
       <div className="pt-2 flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Secure</p>
-          <h1 className="text-2xl md:text-3xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>
+          <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-1">
             Checkout
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            Complete Your Order
           </h1>
         </div>
-        <Link to="/cart" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
-          ← Back to Cart
+        <Link
+          to="/cart"
+          className="text-xs sm:text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
+        >
+          <span>← Back to Cart</span>
         </Link>
       </div>
 
-      {/* Progress bar */}
-      <div className="flex items-center gap-0">
-        {STEPS.map((step, i) => (
-          <div key={step} className="flex items-center flex-1 last:flex-none">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
-                style={{ background: '#4f46e5', color: '#fff' }}>
-                {i + 1}
+      {/* ── Interactive Multi-Step Stepper ── */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-100 shadow-2xs">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          {WIZARD_STEPS.map((s, idx) => {
+            const isCompleted = currentStep > s.id;
+            const isCurrent = currentStep === s.id;
+
+            return (
+              <div key={s.id} className="flex items-center flex-1 last:flex-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Allow clicking completed previous steps
+                    if (s.id < currentStep) setCurrentStep(s.id);
+                  }}
+                  disabled={s.id > currentStep}
+                  className={`flex items-center gap-2.5 text-left transition-all ${
+                    s.id <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black transition-all ${
+                      isCompleted
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : isCurrent
+                        ? 'bg-indigo-600 text-white shadow-xs ring-4 ring-indigo-100'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {isCompleted ? <CheckIcon className="w-4 h-4 stroke-[3]" /> : s.id}
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className={`text-xs font-bold leading-tight ${
+                      isCurrent ? 'text-indigo-600 font-black' : isCompleted ? 'text-slate-800' : 'text-slate-400'
+                    }`}>
+                      {s.label}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      {isCompleted ? 'Completed' : isCurrent ? 'In progress' : 'Upcoming'}
+                    </p>
+                  </div>
+                </button>
+
+                {idx < WIZARD_STEPS.length - 1 && (
+                  <div
+                    className={`flex-1 h-0.5 mx-3 sm:mx-6 rounded-full transition-all ${
+                      currentStep > s.id ? 'bg-emerald-500' : 'bg-slate-200'
+                    }`}
+                  />
+                )}
               </div>
-              <span className="text-xs font-semibold hidden sm:block" style={{ color: '#4f46e5' }}>
-                {step}
-              </span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div className="flex-1 h-0.5 mx-2" style={{ background: '#e5e7eb' }} />
-            )}
-          </div>
-        ))}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Form */}
+      {/* ── Form Body & Wizard Sections ── */}
       <FormProvider {...methods}>
         <form onSubmit={methods.handleSubmit(onSubmit)}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-            {/* Left */}
-            <div className="lg:col-span-2 space-y-5">
-              <ShippingAddress />
-              <BillingAddress />
-              <PaymentMethod />
-
-              {/* Notes */}
-              <div className="rounded-2xl p-6"
-                style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black"
-                    style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>4</div>
-                  <h2 className="text-base font-black text-gray-900">Order Notes</h2>
-                  <span className="text-xs text-gray-400 font-medium">(optional)</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
+            {/* Left 2 Columns: Active Wizard Step Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* ── STEP 1: Shipping Address ── */}
+              {currentStep === 1 && (
+                <div className="space-y-6 animate-fadeIn">
+                  <ShippingAddress />
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={handleProceedToPayment}
+                      variant="primary"
+                      size="lg"
+                      className="px-8 shadow-md"
+                    >
+                      <span>Continue to Payment</span>
+                      <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </div>
                 </div>
-                <textarea
-                  {...methods.register('notes')}
-                  rows={3}
-                  placeholder="Any special instructions for your order or delivery…"
-                  className="w-full rounded-xl text-sm outline-none resize-none"
-                  style={{ padding: '10px 14px', background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#374151' }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#4f46e5'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#e5e7eb'}
-                />
-              </div>
+              )}
+
+              {/* ── STEP 2: Payment Method & Billing ── */}
+              {currentStep === 2 && (
+                <div className="space-y-6 animate-fadeIn">
+                  <PaymentMethod />
+                  <BillingAddress />
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      type="button"
+                      onClick={() => setCurrentStep(1)}
+                      variant="outline"
+                      size="md"
+                    >
+                      <ArrowLeftIcon className="w-4 h-4 mr-1.5" />
+                      <span>Back to Shipping</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleProceedToReview}
+                      variant="primary"
+                      size="lg"
+                      className="px-8 shadow-md"
+                    >
+                      <span>Review Order</span>
+                      <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── STEP 3: Order Review & Confirmation ── */}
+              {currentStep === 3 && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Shipping & Payment Recap Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Destination Recap */}
+                    <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <MapPinIcon className="w-3.5 h-3.5 text-indigo-600" />
+                          Delivery To
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(1)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                        >
+                          <PencilSquareIcon className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                      <p className="text-xs font-bold text-slate-800">
+                        {formValues.shippingAddress?.street}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {formValues.shippingAddress?.city}, {formValues.shippingAddress?.state} – {formValues.shippingAddress?.zipCode}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        📞 +91 {formValues.shippingAddress?.phone}
+                      </p>
+                    </div>
+
+                    {/* Payment Method Recap */}
+                    <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <CreditCardIcon className="w-3.5 h-3.5 text-indigo-600" />
+                          Payment Method
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(2)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                        >
+                          <PencilSquareIcon className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        {selectedPaymentMethod === 'razorpay' ? (
+                          <>
+                            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                              <BoltIcon className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-slate-800">Razorpay Gateway</p>
+                              <p className="text-[11px] text-slate-500 font-medium">Instant UPI, Cards & NetBanking</p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                              <BanknotesIcon className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-slate-800">Cash on Delivery</p>
+                              <p className="text-[11px] text-slate-500 font-medium">Pay at Doorstep upon Arrival</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Notes */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 shadow-2xs space-y-2.5">
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-600">
+                      Special Delivery Instructions (Optional)
+                    </label>
+                    <textarea
+                      {...methods.register('notes')}
+                      rows={2}
+                      placeholder="e.g. Ring doorbell, leave package with security guard, landmark details…"
+                      className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 placeholder-slate-400"
+                    />
+                  </div>
+
+                  {/* Step 3 Navigation Actions */}
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      type="button"
+                      onClick={() => setCurrentStep(2)}
+                      variant="outline"
+                      size="md"
+                    >
+                      <ArrowLeftIcon className="w-4 h-4 mr-1.5" />
+                      <span>Back to Payment</span>
+                    </Button>
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      variant="primary"
+                      size="lg"
+                      className="px-8 shadow-md"
+                    >
+                      {loading ? (
+                        <span>Processing Order…</span>
+                      ) : selectedPaymentMethod === 'razorpay' ? (
+                        <>
+                          <BoltIcon className="w-4 h-4 mr-1.5" />
+                          <span>Pay with Razorpay</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckIcon className="w-4 h-4 mr-1.5 stroke-[3]" />
+                          <span>Confirm Order (COD)</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Right */}
+            {/* Right Column: Order Summary (Visible on all steps) */}
             <div className="lg:col-span-1 space-y-4">
               <OrderSummary />
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 20px rgba(79,70,229,0.35)' }}
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    {methods.watch('paymentMethod') === 'razorpay' ? 'Opening Payment…' : 'Placing Order…'}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                        d={methods.watch('paymentMethod') === 'razorpay'
-                          ? 'M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
-                          : 'M5 13l4 4L19 7'} />
-                    </svg>
-                    {methods.watch('paymentMethod') === 'razorpay' ? 'Pay with Razorpay' : 'Place Order'}
-                  </>
-                )}
-              </button>
-
-              <p className="text-center text-xs text-gray-400 flex items-center justify-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                256-bit SSL encrypted checkout
-              </p>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-center space-y-1">
+                <p className="text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5">
+                  <ShieldCheckIcon className="w-4 h-4 text-emerald-600" />
+                  <span>Statutory GST Invoice Guaranteed</span>
+                </p>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Verifiable digital tax invoice PDF will be generated immediately upon order creation.
+                </p>
+              </div>
             </div>
           </div>
         </form>
       </FormProvider>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.25s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

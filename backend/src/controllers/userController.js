@@ -10,6 +10,9 @@ const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudina
 // @route   GET /api/users/profile
 // @access  Private
 exports.getUserProfile = catchAsync(async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const user = await User.findById(req.userId);
   
   res.status(200).json({
@@ -22,6 +25,9 @@ exports.getUserProfile = catchAsync(async (req, res) => {
 // @route   PUT /api/users/profile
 // @access  Private
 exports.updateUserProfile = catchAsync(async (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const { name, email, phone, address } = req.body;
   const user = await User.findById(req.userId);
 

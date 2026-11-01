@@ -1,128 +1,200 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CATEGORIES } from '../../utils/constants';
+import { Drawer } from '../ui/Drawer';
+import { Button } from '../ui/Button';
+import {
+  FunnelIcon,
+  XMarkIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline';
 
-const ProductFilter = ({ filters, setFilters, setPage }) => {
+const PRICE_PRESETS = [
+  { label: 'All Prices', min: '', max: '' },
+  { label: 'Under ₹1,000', min: '0', max: '1000' },
+  { label: '₹1,000 – ₹5,000', min: '1000', max: '5000' },
+  { label: '₹5,000 – ₹15,000', min: '5000', max: '15000' },
+  { label: 'Above ₹15,000', min: '15000', max: '' },
+];
+
+const SORT_OPTIONS = [
+  { label: 'Newest Arrivals', value: '-createdAt' },
+  { label: 'Price: Low to High', value: 'price' },
+  { label: 'Price: High to Low', value: '-price' },
+  { label: 'Top Rated', value: '-ratings.average' },
+];
+
+const ProductFilter = ({ filters = {}, setFilters, setPage }) => {
   const [localFilters, setLocalFilters] = useState(filters);
-  const [isOpen, setIsOpen] = useState(false); // mobile toggle
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setLocalFilters(prev => ({ ...prev, [name]: value }));
+  // Sync with prop changes (e.g. from URL params)
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const handleChange = (name, value) => {
+    setLocalFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const applyFilters = () => {
     setFilters(localFilters);
-    setPage(1);
-    setIsOpen(false);
+    if (setPage) setPage(1);
+    setIsDrawerOpen(false);
   };
 
   const clearFilters = () => {
     const empty = {};
     setLocalFilters(empty);
     setFilters(empty);
-    setPage(1);
+    if (setPage) setPage(1);
+    setIsDrawerOpen(false);
   };
 
-  const hasActiveFilters = Object.values(localFilters).some(v => v !== '' && v !== undefined);
+  const activeFilterCount = Object.entries(localFilters).filter(
+    ([k, v]) => v !== '' && v !== undefined && k !== 'page' && k !== 'limit'
+  ).length;
 
-  const inputClass =
-    'w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white focus:border-indigo-400 transition-all duration-200 text-gray-700 placeholder-gray-400';
-
-  const FilterContent = () => (
-    <div className="space-y-5">
-      {/* Category */}
+  const FilterBody = () => (
+    <div className="space-y-6 font-sans">
+      {/* ── Category ── */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">
+        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2.5">
           Category
         </label>
-        <select
-          name="category"
-          value={localFilters.category || ''}
-          onChange={handleChange}
-          className={inputClass}
-        >
-          <option value="">All Categories</option>
-          {CATEGORIES.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleChange('category', '')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              !localFilters.category
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            All
+          </button>
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => handleChange('category', cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all ${
+                localFilters.category === cat
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
-      {/* Price Range */}
+      {/* ── Price Presets & Custom ── */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">
-          Price Range (₹)
+        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2.5">
+          Price Range
         </label>
-        <div className="flex items-center gap-2">
+        <div className="space-y-1.5 mb-3">
+          {PRICE_PRESETS.map((preset, idx) => {
+            const isSelected =
+              (localFilters.minPrice || '') === preset.min &&
+              (localFilters.maxPrice || '') === preset.max;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  setLocalFilters((prev) => ({
+                    ...prev,
+                    minPrice: preset.min,
+                    maxPrice: preset.max,
+                  }));
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  isSelected
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold'
+                    : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                }`}
+              >
+                <span>{preset.label}</span>
+                {isSelected && <span className="text-indigo-600 font-black">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom Price Inputs */}
+        <div className="flex items-center gap-2 pt-1">
           <input
             type="number"
-            name="minPrice"
-            placeholder="Min"
+            placeholder="Min ₹"
             value={localFilters.minPrice || ''}
-            onChange={handleChange}
-            className={inputClass}
+            onChange={(e) => handleChange('minPrice', e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-800"
           />
-          <span className="text-gray-400 text-sm shrink-0">–</span>
+          <span className="text-slate-400 text-xs font-bold">–</span>
           <input
             type="number"
-            name="maxPrice"
-            placeholder="Max"
+            placeholder="Max ₹"
             value={localFilters.maxPrice || ''}
-            onChange={handleChange}
-            className={inputClass}
+            onChange={(e) => handleChange('maxPrice', e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-800"
           />
         </div>
       </div>
 
-      {/* Brand */}
+      {/* ── Brand Filter ── */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">
+        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
           Brand
         </label>
         <input
           type="text"
-          name="brand"
-          placeholder="e.g. Nike, Samsung…"
+          placeholder="Filter by brand (e.g. Nike, Apple)"
           value={localFilters.brand || ''}
-          onChange={handleChange}
-          className={inputClass}
+          onChange={(e) => handleChange('brand', e.target.value)}
+          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-800 placeholder-slate-400"
         />
       </div>
 
-      {/* Sort */}
+      {/* ── Sort By ── */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">
+        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
           Sort By
         </label>
         <select
-          name="sort"
-          value={localFilters.sort || ''}
-          onChange={handleChange}
-          className={inputClass}
+          value={localFilters.sort || '-createdAt'}
+          onChange={(e) => handleChange('sort', e.target.value)}
+          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-800 font-medium cursor-pointer"
         >
-          <option value="">Default</option>
-          <option value="price">Price: Low to High</option>
-          <option value="-price">Price: High to Low</option>
-          <option value="-createdAt">Newest First</option>
-          <option value="-ratings.average">Top Rated</option>
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
       </div>
 
-      {/* Buttons */}
-      <div className="flex flex-col gap-2 pt-1">
-        <button
+      {/* ── Action Buttons ── */}
+      <div className="pt-2 space-y-2">
+        <Button
           onClick={applyFilters}
-          className="w-full bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all duration-200 shadow-sm shadow-indigo-200"
+          variant="primary"
+          size="md"
+          className="w-full justify-center shadow-xs"
         >
           Apply Filters
-        </button>
-        {hasActiveFilters && (
-          <button
+        </Button>
+        {activeFilterCount > 0 && (
+          <Button
             onClick={clearFilters}
-            className="w-full bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all duration-200"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-center text-slate-500 hover:text-rose-600"
           >
-            Clear All
-          </button>
+            Reset All Filters
+          </Button>
         )}
       </div>
     </div>
@@ -130,61 +202,66 @@ const ProductFilter = ({ filters, setFilters, setPage }) => {
 
   return (
     <>
-      {/* ── Mobile Toggle Button ── */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:border-indigo-400 transition-all duration-200"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-        </svg>
-        Filters
-        {hasActiveFilters && (
-          <span className="bg-indigo-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-            {Object.values(localFilters).filter(v => v !== '' && v !== undefined).length}
-          </span>
+      {/* ── Mobile Trigger Button ── */}
+      <div className="lg:hidden flex items-center justify-between pb-3">
+        <button
+          type="button"
+          onClick={() => setIsDrawerOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs hover:border-indigo-400 transition-all"
+        >
+          <FunnelIcon className="w-4 h-4 text-indigo-600" />
+          <span>Filters & Sort</span>
+          {activeFilterCount > 0 && (
+            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        {activeFilterCount > 0 && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+          >
+            <ArrowPathIcon className="w-3.5 h-3.5" />
+            <span>Reset</span>
+          </button>
         )}
-      </button>
+      </div>
 
       {/* ── Mobile Drawer ── */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute right-0 top-0 bottom-0 w-80 bg-white shadow-2xl p-6 overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-base font-bold text-gray-900">Filters</h3>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            <FilterContent />
-          </div>
-        </div>
-      )}
-
-      {/* ── Desktop Sidebar ── */}
-      <div className="hidden lg:block bg-white rounded-2xl p-5 sticky top-24"
-        style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05)' }}
+      <Drawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        title="Filter & Sort Products"
+        position="right"
       >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Filters</h3>
-          {hasActiveFilters && (
+        <div className="p-5">
+          <FilterBody />
+        </div>
+      </Drawer>
+
+      {/* ── Desktop Sticky Sidebar ── */}
+      <div className="hidden lg:block bg-white rounded-2xl border border-slate-100 p-5 sticky top-24 shadow-xs">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <FunnelIcon className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+              Filters
+            </h3>
+          </div>
+          {activeFilterCount > 0 && (
             <button
+              type="button"
               onClick={clearFilters}
-              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
             >
               Reset
             </button>
           )}
         </div>
-        <FilterContent />
+        <FilterBody />
       </div>
     </>
   );

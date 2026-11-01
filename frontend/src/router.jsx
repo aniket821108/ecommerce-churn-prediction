@@ -50,7 +50,7 @@ export const router = createBrowserRouter([
       {
         path: 'cart',
         element: (
-          <CustomerRoute requireAuth>
+          <CustomerRoute requireAuth={false}>
             {withSuspense(Cart)}
           </CustomerRoute>
         ),

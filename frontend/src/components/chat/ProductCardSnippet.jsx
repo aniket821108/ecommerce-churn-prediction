@@ -22,10 +22,6 @@ const ProductCardSnippet = ({ product }) => {
       return;
     }
 
-    if (!user) {
-      toast.error('Please log in to add items to your cart.');
-      return;
-    }
 
     if (product.stock <= 0) {
       toast.error('This product is currently out of stock.');
@@ -34,7 +30,7 @@ const ProductCardSnippet = ({ product }) => {
 
     setAdding(true);
     try {
-      await addItem(product._id, 1);
+      await addItem(product, 1);
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     } catch (_) {

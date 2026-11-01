@@ -12,6 +12,11 @@ const useAuthStore = create(
       // Set auth state (called after successful login/register)
       setAuth: (user) => {
         set({ user, isAuthenticated: true, isLoading: false });
+        if (user?.role !== 'admin') {
+          import('./cartStore').then(({ default: useCartStore }) => {
+            useCartStore.getState().syncGuestCartToServer().catch(() => {});
+          }).catch(() => {});
+        }
       },
 
       // Clear auth state (called on logout / token failure)
@@ -27,6 +32,11 @@ const useAuthStore = create(
       loginWithCredentials: async (email, password, rememberMe = false) => {
         const response = await api.post('/auth/login', { email, password, rememberMe });
         set({ user: response.data.user, isAuthenticated: true, isLoading: false });
+        if (response.data.user?.role !== 'admin') {
+          import('./cartStore').then(({ default: useCartStore }) => {
+            useCartStore.getState().syncGuestCartToServer().catch(() => {});
+          }).catch(() => {});
+        }
         return response;
       },
 
@@ -43,7 +53,10 @@ const useAuthStore = create(
       // Load user from server using HttpOnly cookie
       loadUser: async () => {
         try {
-          const response = await api.get('/auth/me');
+          const response = await api.get('/auth/me', {
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            params: { _t: Date.now() },
+          });
           set({ user: response.data.user, isAuthenticated: true, isLoading: false });
         } catch (_) {
           set({ user: null, isAuthenticated: false, isLoading: false });

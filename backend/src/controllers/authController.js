@@ -60,6 +60,9 @@ const safeUser = (u) => ({
   role:          u.role,
   phone:         u.phone,
   avatar:        u.avatar,
+  address:       u.address,
+  createdAt:     u.createdAt,
+  lastLogin:     u.lastLogin,
   emailVerified: u.emailVerified !== false,
 });
 
@@ -279,6 +282,9 @@ exports.refreshToken = catchAsync(async (req, res) => {
 // GET /api/auth/me
 // ══════════════════════════════════════════════════════
 exports.getMe = catchAsync(async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const user = await User.findById(req.userId);
   if (!user) {
     return res.status(404).json({ success: false, message: 'User not found' });

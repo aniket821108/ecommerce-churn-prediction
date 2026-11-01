@@ -1,10 +1,11 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import { useEffect } from 'react';
 
 const CustomerRoute = ({ children, requireAuth = false }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
+  const location = useLocation();
 
   useEffect(() => {
     if (isAuthenticated && user?.role === 'admin') {
@@ -19,8 +20,10 @@ const CustomerRoute = ({ children, requireAuth = false }) => {
     return <Navigate to="/admin" replace />;
   }
 
+  // If route strictly requires auth (e.g. /checkout), redirect to login with return path
   if (requireAuth && !isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const returnUrl = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?next=${returnUrl}`} replace />;
   }
 
   return children;

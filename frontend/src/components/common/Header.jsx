@@ -17,17 +17,15 @@ const Header = () => {
   const [visualSearchOpen, setVisualSearchOpen] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const itemCount = isAuthenticated && !isAdmin
+  const itemCount = !isAdmin
     ? items?.reduce((sum, item) => sum + item.quantity, 0) || 0
     : 0;
 
   useEffect(() => {
     if (isAuthenticated && !isAdmin) {
       fetchCart();
-    } else if (!isAuthenticated && items?.length > 0) {
-      useCartStore.getState().resetCartLocal();
     }
-  }, [isAuthenticated, isAdmin, items?.length]);
+  }, [isAuthenticated, isAdmin]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -147,7 +145,7 @@ const Header = () => {
                         ? user.avatar 
                         : user?.avatar?.url;
                         return src 
-                        ? <img src={src} alt="avatar" className="w-full h-full object-cover rounded-lg" />
+                        ? <img src={src} alt="avatar" className="w-full h-full object-cover rounded-lg" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                           : user?.name?.charAt(0).toUpperCase();
                       })()}
                     </div>

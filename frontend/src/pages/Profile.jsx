@@ -1,77 +1,105 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '../services/userService';
 import useAuthStore from '../store/authStore';
 import Loader from '../components/common/Loader';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { EmptyState } from '../components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
+import {
+  UserIcon,
+  KeyIcon,
+  MapPinIcon,
+  ShoppingBagIcon,
+  ExclamationTriangleIcon,
+  CameraIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  CalendarDaysIcon,
+  ClockIcon,
+  ShieldCheckIcon,
+  ArrowRightOnRectangleIcon,
+  TrashIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 
-// ── Shared styles ─────────────────────────────────────────
-const inputStyle = {
-  width: '100%', padding: '10px 14px', borderRadius: '10px',
-  fontSize: '14px', outline: 'none', transition: 'border-color 0.15s',
-  background: '#fafafa', border: '1px solid #e5e7eb', color: '#111827',
-};
-const labelStyle = {
-  display: 'block', fontSize: '12px', fontWeight: 600,
-  textTransform: 'uppercase', letterSpacing: '0.06em',
-  color: '#9ca3af', marginBottom: '6px',
-};
-
-const Field = ({ label, children }) => (
-  <div>
-    <label style={labelStyle}>{label}</label>
-    {children}
-  </div>
-);
-
-const FocusInput = ({ ...props }) => {
-  const [focused, setFocused] = useState(false);
-  return (
-    <input
-      {...props}
-      style={{ ...inputStyle, borderColor: focused ? '#4f46e5' : '#e5e7eb', background: focused ? '#fff' : '#fafafa' }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    />
-  );
-};
-
-// ── Tab definitions ───────────────────────────────────────
-const TABS = [
-  { id: 'profile',   label: 'Profile',        icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-  { id: 'password',  label: 'Password',        icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
-  { id: 'address',   label: 'Address',         icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z' },
-  { id: 'orders',    label: 'Orders',          icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
-  { id: 'danger',    label: 'Danger Zone',     icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan',
+  'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh',
+  'Uttarakhand', 'West Bengal', 'Chandigarh', 'Jammu and Kashmir',
+  'Ladakh', 'Puducherry'
 ];
 
-// ── Status badge ──────────────────────────────────────────
-const statusColor = (status) => {
-  const m = { delivered: ['#0d2015','#4ade80'], processing: ['#0d1529','#60a5fa'], shipped: ['#0f1529','#818cf8'], pending: ['#1f1608','#fbbf24'], cancelled: ['#200d0d','#f87171'] };
-  return m[status] || ['#f3f4f6','#6b7280'];
+const TABS = [
+  { id: 'profile',   label: 'Personal Info',  icon: UserIcon },
+  { id: 'password',  label: 'Security & Auth', icon: KeyIcon },
+  { id: 'address',   label: 'Saved Address',  icon: MapPinIcon },
+  { id: 'orders',    label: 'Order History',  icon: ShoppingBagIcon },
+  { id: 'danger',    label: 'Danger Zone',    icon: ExclamationTriangleIcon },
+];
+
+const getStatusBadgeVariant = (status) => {
+  switch (status) {
+    case 'delivered': return 'success';
+    case 'processing': return 'info';
+    case 'shipped': return 'primary';
+    case 'pending': return 'warning';
+    case 'cancelled': return 'danger';
+    default: return 'default';
+  }
 };
 
-// ── Main Component ─────────────────────────────────────────
 const Profile = () => {
   const [activeTab, setActiveTab] = useState('profile');
-  const { user, updateProfile, updatePassword, logout, loadUser } = useAuthStore();
+  const { user, updatePassword, logout, loadUser } = useAuthStore();
   const queryClient = useQueryClient();
-  const fileRef = useRef();
+  const fileRef = useRef(null);
 
-  // ── Profile form state
+  // ── 1. Fetch fresh user data on mount with query cache-busting
+  const { data: profileQueryData } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const res = await userService.getUserProfile();
+      if (res?.data?.user) {
+        useAuthStore.getState().setAuth(res.data.user);
+      }
+      return res;
+    },
+    staleTime: 30000,
+  });
+
+  const activeUser = profileQueryData?.data?.user || user;
+
+  // ── 2. Profile form state
   const [profileData, setProfileData] = useState({
-    name: user?.name || '', email: user?.email || '', phone: user?.phone || '',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
   });
   const [avatarPreview, setAvatarPreview] = useState(null);
-  const [avatarFile, setAvatarFile] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarImgError, setAvatarImgError] = useState(false);
 
-  // ── Password form state
-  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
+  // ── 3. Password form state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
 
-  // ── Address form state
+  // ── 4. Address form state
   const [addressData, setAddressData] = useState({
     street: user?.address?.street || '',
     city: user?.address?.city || '',
@@ -80,30 +108,30 @@ const Profile = () => {
     country: user?.address?.country || 'India',
   });
 
-  // ── Delete confirmation
+  // ── 5. Danger zone state
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
-  // ── Sync form data when user state loads or updates
+  // Synchronize state when activeUser changes
   useEffect(() => {
-    if (user) {
+    if (activeUser) {
       setProfileData({
-        name: user.name || '',
-        email: user.email || '',
-        phone: user.phone || '',
+        name: activeUser.name || '',
+        email: activeUser.email || '',
+        phone: activeUser.phone || '',
       });
-      if (user.address) {
+      if (activeUser.address) {
         setAddressData({
-          street: user.address.street || '',
-          city: user.address.city || '',
-          state: user.address.state || '',
-          zipCode: user.address.zipCode || '',
-          country: user.address.country || 'India',
+          street: activeUser.address.street || '',
+          city: activeUser.address.city || '',
+          state: activeUser.address.state || '',
+          zipCode: activeUser.address.zipCode || '',
+          country: activeUser.address.country || 'India',
         });
       }
     }
-  }, [user]);
+  }, [activeUser]);
 
-  // ── Queries
+  // ── 6. Query recent orders
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['userOrders'],
     queryFn: () => userService.getUserOrders({ limit: 5 }),
@@ -111,14 +139,13 @@ const Profile = () => {
   });
   const orders = ordersData?.data?.orders || [];
 
-  // ── Mutations
+  // ── 7. Profile mutations
   const profileMutation = useMutation({
     mutationFn: async () => {
       const fd = new FormData();
       fd.append('name', profileData.name);
       fd.append('email', profileData.email);
       fd.append('phone', profileData.phone);
-      if (avatarFile) fd.append('avatar', avatarFile);
       return userService.updateUserProfile(fd);
     },
     onSuccess: async (res) => {
@@ -126,32 +153,40 @@ const Profile = () => {
         useAuthStore.getState().setAuth(res.data.user);
       }
       await loadUser();
-      queryClient.invalidateQueries(['userProfile']);
-      setAvatarFile(null);
-      setAvatarPreview(null);
-      toast.success('Profile updated!');
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      toast.success('Personal profile details saved!');
     },
     onError: (e) => toast.error(e.response?.data?.message || 'Update failed'),
   });
 
-  const passwordMutation = useMutation({
-    mutationFn: () => updatePassword(passwordData),
-    onSuccess: () => {
-      toast.success('Password changed!');
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    },
-    onError: (e) => toast.error(e.response?.data?.message || 'Password change failed'),
-  });
-
   const addressMutation = useMutation({
     mutationFn: () => userService.updateUserProfile({ address: addressData }),
-    onSuccess: () => toast.success('Address saved!'),
+    onSuccess: async (res) => {
+      if (res?.data?.user) {
+        useAuthStore.getState().setAuth(res.data.user);
+      }
+      await loadUser();
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      toast.success('Default delivery address saved!');
+    },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to save address'),
   });
 
-  // ── Handlers
+  const passwordMutation = useMutation({
+    mutationFn: () => updatePassword({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    }),
+    onSuccess: () => {
+      toast.success('Password updated successfully! 🔒');
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Password update failed'),
+  });
+
+  // ── 8. Avatar Upload Handler
   const handleAvatarChange = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -165,6 +200,7 @@ const Profile = () => {
 
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview(previewUrl);
+    setAvatarImgError(false);
     setUploadingAvatar(true);
 
     try {
@@ -174,448 +210,675 @@ const Profile = () => {
 
       if (res?.data?.user) {
         useAuthStore.getState().setAuth(res.data.user);
+        queryClient.setQueryData(['userProfile'], res);
       }
       await loadUser();
-      queryClient.invalidateQueries(['userProfile']);
-      setAvatarFile(null);
+      await queryClient.invalidateQueries({ queryKey: ['userProfile'] });
       setAvatarPreview(null);
       try { URL.revokeObjectURL(previewUrl); } catch (_) {}
-      toast.success('Profile picture updated successfully!');
+      toast.success('Profile avatar updated successfully!');
     } catch (err) {
       console.error('Avatar upload failed:', err);
       setAvatarPreview(null);
-      toast.error(err.response?.data?.message || 'Failed to upload profile picture');
+      toast.error(err.response?.data?.message || 'Failed to upload avatar');
     } finally {
       setUploadingAvatar(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
+  // Password criteria checklist computation
+  const newPassword = passwordData.newPassword;
+  const passwordChecks = useMemo(() => [
+    { label: 'At least 8 characters long', met: newPassword.length >= 8 },
+    { label: 'One uppercase letter (A-Z)', met: /[A-Z]/.test(newPassword) },
+    { label: 'One lowercase letter (a-z)', met: /[a-z]/.test(newPassword) },
+    { label: 'One number (0-9)', met: /[0-9]/.test(newPassword) },
+    { label: 'One special symbol (!@#$%^&*)', met: /[^A-Za-z0-9]/.test(newPassword) },
+  ], [newPassword]);
+
+  const isPasswordValid = passwordChecks.every((c) => c.met);
+
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Passwords do not match'); return;
+    if (!passwordData.currentPassword) {
+      toast.error('Please enter your current password');
+      return;
     }
-    if (passwordData.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters'); return;
+    if (!isPasswordValid) {
+      toast.error('New password does not meet the security criteria');
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
     }
     passwordMutation.mutate();
   };
 
-  const avatarSrc = avatarPreview || (typeof user?.avatar === 'string' ? user.avatar : user?.avatar?.url) || null;
-  const initials = user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
+  const rawAvatar = activeUser?.avatar;
+  const avatarUrlFromUser = typeof rawAvatar === 'string' ? rawAvatar : rawAvatar?.url;
+  const avatarSrc = avatarPreview || (!avatarImgError && avatarUrlFromUser ? avatarUrlFromUser : null);
+  const initials = activeUser?.name?.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4">
-
+    <div className="max-w-6xl mx-auto py-6 sm:py-10 px-4 font-sans space-y-8">
       {/* ── Page Header ── */}
-      <div className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Account</p>
-        <h1 className="text-2xl md:text-3xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>
-          My Profile
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-slate-400 mb-1">
+          Account Management
+        </p>
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          Customer Profile & Settings
         </h1>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 items-start">
+        {/* ── Left Sidebar (Desktop) / Top Carousel (Mobile) ── */}
+        <aside className="w-full lg:w-72 shrink-0 space-y-4">
+          {/* User Profile Card */}
+          <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col items-center text-center">
+            {/* Avatar with Camera Trigger */}
+            <div className="relative mb-3.5">
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden text-white text-xl font-black relative bg-gradient-to-br from-indigo-600 to-violet-600 shadow-md">
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={activeUser?.name || 'Avatar'}
+                    className="w-full h-full object-cover"
+                    onError={() => setAvatarImgError(true)}
+                  />
+                ) : (
+                  <span>{initials}</span>
+                )}
 
-        {/* ── Sidebar ── */}
-        <aside className="lg:w-64 flex-shrink-0">
-          {/* Avatar card */}
-          <div
-            className="rounded-2xl p-6 flex flex-col items-center text-center mb-4"
-            style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
-          >
-            {/* Avatar */}
-            <div className="relative mb-4">
-              <div
-                className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden text-white text-xl font-black relative"
-                style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
-              >
-                {avatarSrc
-                  ? <img src={avatarSrc} alt="Avatar" className="w-full h-full object-cover" />
-                  : initials
-                }
                 {uploadingAvatar && (
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-10">
+                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-10">
                     <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
+
               <button
+                type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploadingAvatar}
-                className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-white transition-transform hover:scale-110 disabled:opacity-50"
-                style={{ background: '#4f46e5', boxShadow: '0 2px 8px rgba(79,70,229,0.4)' }}
-                title="Change Profile Picture"
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-xl flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                title="Change Avatar"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+                <CameraIcon className="w-4 h-4" />
               </button>
-              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/jpg,image/webp" className="hidden" onChange={handleAvatarChange} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/jpg,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
 
-            <p className="font-black text-gray-900 text-sm">{user?.name}</p>
-            <p className="text-xs text-gray-400 mt-0.5 truncate w-full">{user?.email}</p>
-            <span
-              className="mt-2 px-2.5 py-0.5 rounded-full text-xs font-bold capitalize"
-              style={{ background: user?.role === 'admin' ? '#f5f3ff' : '#f0fdf4', color: user?.role === 'admin' ? '#7c3aed' : '#16a34a' }}
-            >
-              {user?.role}
-            </span>
+            <h3 className="font-black text-slate-900 text-sm tracking-tight">
+              {activeUser?.name || 'Customer'}
+            </h3>
+            <p className="text-xs text-slate-400 font-medium truncate max-w-full">
+              {activeUser?.email}
+            </p>
 
-            {user?.lastLogin && (
-              <p className="text-xs text-gray-400 mt-3">
-                Last login: {new Date(user.lastLogin).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </p>
-            )}
+            <div className="mt-2.5">
+              <Badge
+                variant={activeUser?.role === 'admin' ? 'primary' : 'success'}
+                size="sm"
+                className="capitalize font-bold"
+              >
+                {activeUser?.role || 'Customer'}
+              </Badge>
+            </div>
+
+            {/* Account Metadata */}
+            <div className="w-full mt-4 pt-4 border-t border-slate-100 space-y-1.5 text-left">
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                <CalendarDaysIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span>
+                  Member since{' '}
+                  <strong className="text-slate-700">
+                    {activeUser?.createdAt
+                      ? new Date(activeUser.createdAt).toLocaleDateString('en-IN', {
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : '—'}
+                  </strong>
+                </span>
+              </div>
+
+              {activeUser?.lastLogin && (
+                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                  <ClockIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>
+                    Last active{' '}
+                    <strong className="text-slate-700">
+                      {new Date(activeUser.lastLogin).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </strong>
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Nav tabs */}
-          <nav
-            className="rounded-2xl overflow-hidden p-1.5"
-            style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
-          >
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-all duration-150 mb-0.5 last:mb-0"
-                style={{
-                  background: activeTab === tab.id ? (tab.id === 'danger' ? '#fff1f2' : '#eef2ff') : 'transparent',
-                  color: activeTab === tab.id ? (tab.id === 'danger' ? '#ef4444' : '#4f46e5') : (tab.id === 'danger' ? '#ef4444' : '#6b7280'),
-                  fontWeight: activeTab === tab.id ? 600 : 400,
-                }}
-              >
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={tab.icon} />
-                </svg>
-                {tab.label}
-              </button>
-            ))}
+          {/* Navigation Tabs Bar */}
+          <nav className="p-2 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-row lg:flex-col overflow-x-auto gap-1">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              const isDanger = tab.id === 'danger';
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 text-left ${
+                    isSelected
+                      ? isDanger
+                        ? 'bg-rose-50 text-rose-700 shadow-2xs'
+                        : 'bg-indigo-600 text-white shadow-xs'
+                      : isDanger
+                      ? 'text-rose-500 hover:bg-rose-50/60'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isSelected && !isDanger ? 'text-white' : ''}`} />
+                  <span className="whitespace-nowrap">{tab.label}</span>
+                </button>
+              );
+            })}
           </nav>
         </aside>
 
-        {/* ── Main Content ── */}
-        <main className="flex-1">
-          <div
-            className="rounded-2xl p-6 md:p-8"
-            style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
-          >
-
-            {/* ══ PROFILE TAB ══ */}
+        {/* ── Main Tab Panel Content ── */}
+        <main className="flex-1 w-full min-w-0">
+          <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+            {/* ══ TAB 1: PERSONAL INFORMATION ══ */}
             {activeTab === 'profile' && (
-              <div>
-                <h2 className="text-base font-black text-gray-900 mb-1">Personal Information</h2>
-                <p className="text-sm text-gray-400 mb-6">Update your name, email and phone number.</p>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-black text-slate-900 tracking-tight">
+                    Personal Information
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Update your primary account contact details.
+                  </p>
+                </div>
 
-                <div className="space-y-4">
-                  <Field label="Full Name">
-                    <FocusInput type="text" value={profileData.name}
-                      onChange={e => setProfileData({ ...profileData, name: e.target.value })}
-                      placeholder="Your full name" />
-                  </Field>
-                  <Field label="Email Address">
-                    <FocusInput type="email" value={profileData.email}
-                      onChange={e => setProfileData({ ...profileData, email: e.target.value })}
-                      placeholder="you@example.com" />
-                  </Field>
-                  <Field label="Phone Number">
-                    <FocusInput type="tel" value={profileData.phone}
-                      onChange={e => setProfileData({ ...profileData, phone: e.target.value })}
-                      placeholder="10-digit mobile number" />
-                  </Field>
+                <div className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.name}
+                      onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                      placeholder="Your full name"
+                      className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                    />
+                  </div>
 
-                  {/* Member since */}
-                  <div className="pt-2 pb-1">
-                    <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #f1f5f9' }}>
-                      <svg className="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={profileData.email}
+                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                      placeholder="you@example.com"
+                      className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={profileData.phone}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      placeholder="10-digit mobile number"
+                      className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      onClick={() => profileMutation.mutate()}
+                      disabled={profileMutation.isPending}
+                      variant="primary"
+                      size="md"
+                      className="px-6 shadow-xs"
+                    >
+                      {profileMutation.isPending ? 'Saving Details…' : 'Save Personal Details'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ TAB 2: SECURITY & PASSWORD ══ */}
+            {activeTab === 'password' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-black text-slate-900 tracking-tight">
+                    Security & Password
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Ensure your account is protected with a cryptographically strong password.
+                  </p>
+                </div>
+
+                <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-xl">
+                  {/* Current Password */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Current Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPasswords.current ? 'text' : 'password'}
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        placeholder="Enter current password"
+                        className="w-full pl-4 pr-11 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords((p) => ({ ...p, current: !p.current }))}
+                        className="absolute right-3.5 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPasswords.current ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      New Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPasswords.new ? 'text' : 'password'}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        placeholder="Enter new strong password"
+                        className="w-full pl-4 pr-11 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords((p) => ({ ...p, new: !p.new }))}
+                        className="absolute right-3.5 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPasswords.new ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Criteria Checklist */}
+                    {newPassword.length > 0 && (
+                      <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                          Password Security Checklist:
+                        </p>
+                        {passwordChecks.map((check, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 text-xs font-medium">
+                            {check.met ? (
+                              <CheckCircleIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <XCircleIcon className="w-4 h-4 text-slate-300 shrink-0" />
+                            )}
+                            <span className={check.met ? 'text-slate-700 font-semibold' : 'text-slate-400'}>
+                              {check.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Confirm New Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPasswords.confirm ? 'text' : 'password'}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        placeholder="Re-enter new password"
+                        className="w-full pl-4 pr-11 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords((p) => ({ ...p, confirm: !p.confirm }))}
+                        className="absolute right-3.5 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPasswords.confirm ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      disabled={passwordMutation.isPending}
+                      variant="primary"
+                      size="md"
+                      className="px-6 shadow-xs"
+                    >
+                      {passwordMutation.isPending ? 'Updating Password…' : 'Update Password'}
+                    </Button>
+                  </div>
+                </form>
+
+                {/* Session Invalidation Card */}
+                <div className="pt-4 border-t border-slate-100 max-w-xl">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <ShieldCheckIcon className="w-4 h-4 text-indigo-600" />
+                        <span>Active Session Telemetry</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Changing your password automatically revokes all other active sessions via token rotation.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ TAB 3: SAVED ADDRESS ══ */}
+            {activeTab === 'address' && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-black text-slate-900 tracking-tight">
+                    Saved Delivery Address
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    This default address is automatically loaded at checkout.
+                  </p>
+                </div>
+
+                <div className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Street Address
+                    </label>
+                    <input
+                      type="text"
+                      value={addressData.street}
+                      onChange={(e) => setAddressData({ ...addressData, street: e.target.value })}
+                      placeholder="House / Flat no., Building, Area"
+                      className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        value={addressData.city}
+                        onChange={(e) => setAddressData({ ...addressData, city: e.target.value })}
+                        placeholder="City"
+                        className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        State
+                      </label>
+                      <select
+                        value={addressData.state}
+                        onChange={(e) => setAddressData({ ...addressData, state: e.target.value })}
+                        className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 font-medium cursor-pointer"
+                      >
+                        <option value="">Select State</option>
+                        {INDIAN_STATES.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        PIN Code
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={addressData.zipCode}
+                        onChange={(e) => setAddressData({ ...addressData, zipCode: e.target.value })}
+                        placeholder="6-digit PIN"
+                        className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Country
+                      </label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={addressData.country}
+                        className="w-full px-4 py-3 text-xs sm:text-sm bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Formatted Preview Card */}
+                  {(addressData.street || addressData.city) && (
+                    <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-start gap-3">
+                      <MapPinIcon className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs text-gray-400 font-medium">Member since</p>
-                        <p className="text-sm font-semibold text-gray-700">
-                          {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+                        <p className="text-xs font-bold text-indigo-950">
+                          Formatted Delivery Destination:
+                        </p>
+                        <p className="text-xs text-indigo-800 font-medium mt-0.5">
+                          {[addressData.street, addressData.city, addressData.state, addressData.zipCode, addressData.country].filter(Boolean).join(', ')}
                         </p>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <button
-                    onClick={() => profileMutation.mutate()}
-                    disabled={profileMutation.isPending}
-                    className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}
-                  >
-                    {profileMutation.isPending ? 'Saving…' : 'Save Changes'}
-                  </button>
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      onClick={() => addressMutation.mutate()}
+                      disabled={addressMutation.isPending}
+                      variant="primary"
+                      size="md"
+                      className="px-6 shadow-xs"
+                    >
+                      {addressMutation.isPending ? 'Saving Address…' : 'Save Default Address'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* ══ PASSWORD TAB ══ */}
-            {activeTab === 'password' && (
-              <div>
-                <h2 className="text-base font-black text-gray-900 mb-1">Change Password</h2>
-                <p className="text-sm text-gray-400 mb-6">Choose a strong password with at least 6 characters.</p>
-
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  {[
-                    { key: 'currentPassword', label: 'Current Password', placeholder: 'Enter current password' },
-                    { key: 'newPassword',      label: 'New Password',     placeholder: 'Enter new password' },
-                    { key: 'confirmPassword',  label: 'Confirm Password', placeholder: 'Re-enter new password' },
-                  ].map(({ key, label, placeholder }) => {
-                    const show = showPasswords[key.replace('Password','').replace('confirm','confirm').replace('current','current').replace('new','new')];
-                    const showKey = key === 'currentPassword' ? 'current' : key === 'newPassword' ? 'new' : 'confirm';
-                    return (
-                      <Field key={key} label={label}>
-                        <div className="relative">
-                          <input
-                            type={showPasswords[showKey] ? 'text' : 'password'}
-                            value={passwordData[key]}
-                            onChange={e => setPasswordData({ ...passwordData, [key]: e.target.value })}
-                            placeholder={placeholder}
-                            style={{ ...inputStyle, paddingRight: '44px' }}
-                            onFocus={e => e.currentTarget.style.borderColor = '#4f46e5'}
-                            onBlur={e => e.currentTarget.style.borderColor = '#e5e7eb'}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPasswords(p => ({ ...p, [showKey]: !p[showKey] }))}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d={showPasswords[showKey]
-                                  ? 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'
-                                  : 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'
-                                }
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </Field>
-                    );
-                  })}
-
-                  {/* Password strength hint */}
-                  {passwordData.newPassword && (
-                    <div className="flex gap-1.5 pt-1">
-                      {[1,2,3,4].map(i => {
-                        const len = passwordData.newPassword.length;
-                        const strength = len < 6 ? 1 : len < 8 ? 2 : len < 12 ? 3 : 4;
-                        const colors = ['#ef4444','#f97316','#eab308','#22c55e'];
-                        return (
-                          <div key={i} className="flex-1 h-1 rounded-full transition-colors duration-300"
-                            style={{ background: i <= strength ? colors[strength-1] : '#e5e7eb' }} />
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={passwordMutation.isPending}
-                    className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}
-                  >
-                    {passwordMutation.isPending ? 'Updating…' : 'Update Password'}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* ══ ADDRESS TAB ══ */}
-            {activeTab === 'address' && (
-              <div>
-                <h2 className="text-base font-black text-gray-900 mb-1">Saved Address</h2>
-                <p className="text-sm text-gray-400 mb-6">This address will be pre-filled at checkout.</p>
-
-                <div className="space-y-4">
-                  <Field label="Street Address">
-                    <FocusInput type="text" value={addressData.street}
-                      onChange={e => setAddressData({ ...addressData, street: e.target.value })}
-                      placeholder="House no., street, area" />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="City">
-                      <FocusInput type="text" value={addressData.city}
-                        onChange={e => setAddressData({ ...addressData, city: e.target.value })}
-                        placeholder="City" />
-                    </Field>
-                    <Field label="State">
-                      <FocusInput type="text" value={addressData.state}
-                        onChange={e => setAddressData({ ...addressData, state: e.target.value })}
-                        placeholder="State" />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="PIN Code">
-                      <FocusInput type="text" value={addressData.zipCode}
-                        onChange={e => setAddressData({ ...addressData, zipCode: e.target.value })}
-                        placeholder="6-digit PIN" />
-                    </Field>
-                    <Field label="Country">
-                      <FocusInput type="text" value={addressData.country}
-                        onChange={e => setAddressData({ ...addressData, country: e.target.value })}
-                        placeholder="Country" />
-                    </Field>
-                  </div>
-
-                  {/* Address preview */}
-                  {(addressData.street || addressData.city) && (
-                    <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: '#f5f3ff', border: '1px solid #ede9fe' }}>
-                      <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: '#7c3aed' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <p className="text-sm leading-relaxed" style={{ color: '#6d28d9' }}>
-                        {[addressData.street, addressData.city, addressData.state, addressData.zipCode, addressData.country].filter(Boolean).join(', ')}
-                      </p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => addressMutation.mutate()}
-                    disabled={addressMutation.isPending}
-                    className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}
-                  >
-                    {addressMutation.isPending ? 'Saving…' : 'Save Address'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ══ ORDERS TAB ══ */}
+            {/* ══ TAB 4: ORDERS HISTORY ══ */}
             {activeTab === 'orders' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-black text-gray-900 mb-0.5">Order History</h2>
-                    <p className="text-sm text-gray-400">Your 5 most recent orders.</p>
+                    <h2 className="text-base font-black text-slate-900 tracking-tight">
+                      Recent Orders
+                    </h2>
+                    <p className="text-xs text-slate-400 font-medium">
+                      Review order tracking, live delivery maps, and tax invoices.
+                    </p>
                   </div>
-                  <Link to="/orders"
-                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
-                    View all →
+                  <Link
+                    to="/orders"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    View All Orders →
                   </Link>
                 </div>
 
-                {ordersLoading ? <Loader /> : orders.length === 0 ? (
-                  <div className="py-16 flex flex-col items-center text-center">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#f5f3ff' }}>
-                      <svg className="w-7 h-7" style={{ color: '#7c3aed' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                      </svg>
-                    </div>
-                    <p className="font-semibold text-gray-700 text-sm">No orders yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Start shopping to see your orders here.</p>
-                    <Link to="/shop"
-                      className="mt-4 px-5 py-2.5 rounded-xl text-sm font-bold text-white"
-                      style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
-                      Browse Shop
-                    </Link>
-                  </div>
+                {ordersLoading ? (
+                  <Loader />
+                ) : orders.length === 0 ? (
+                  <EmptyState
+                    icon={<ShoppingBagIcon className="w-8 h-8 text-indigo-600" />}
+                    title="No orders placed yet"
+                    description="You haven't placed any orders yet. Discover trending products and fast delivery!"
+                    actionLabel="Explore Catalog"
+                    actionTo="/shop"
+                  />
                 ) : (
                   <div className="space-y-3">
-                    {orders.map((order) => {
-                      const [bg, color] = statusColor(order.status);
-                      return (
-                        <Link
-                          key={order._id}
-                          to={`/orders/${order._id}`}
-                          className="flex items-center justify-between p-4 rounded-xl transition-all duration-150 hover:-translate-y-0.5"
-                          style={{ background: '#fafafa', border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                              style={{ background: '#eef2ff' }}>
-                              <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-gray-900">#{order.orderNumber || order._id?.slice(-6).toUpperCase()}</p>
-                              <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                            </div>
+                    {orders.map((order) => (
+                      <Link
+                        key={order._id}
+                        to={`/orders/${order._id}`}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 transition-all shadow-2xs gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                            <ShoppingBagIcon className="w-5 h-5" />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-gray-800">
+                          <div>
+                            <p className="text-xs font-black text-slate-800">
+                              Order #{order.orderNumber || order._id?.slice(-8).toUpperCase()}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-medium">
+                              Placed on {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3.5">
+                          <div className="text-right">
+                            <p className="text-xs font-black text-slate-900">
                               ₹{(order.total || order.totalPrice || 0).toLocaleString('en-IN')}
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize"
-                              style={{ background: bg, color }}>
-                              {order.status}
-                            </span>
-                            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-medium">
+                              {order.items?.length || 1} item(s)
+                            </p>
                           </div>
-                        </Link>
-                      );
-                    })}
+
+                          <Badge
+                            variant={getStatusBadgeVariant(order.status)}
+                            size="sm"
+                            className="capitalize font-bold"
+                          >
+                            {order.status}
+                          </Badge>
+
+                          <ChevronRightIcon className="w-4 h-4 text-slate-300 hidden sm:block" />
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
             )}
 
-            {/* ══ DANGER ZONE TAB ══ */}
+            {/* ══ TAB 5: DANGER ZONE ══ */}
             {activeTab === 'danger' && (
-              <div>
-                <h2 className="text-base font-black text-gray-900 mb-1">Danger Zone</h2>
-                <p className="text-sm text-gray-400 mb-6">These actions are permanent and cannot be undone.</p>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-black text-rose-600 tracking-tight">
+                    Danger Zone
+                  </h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Permanent and sensitive account operations.
+                  </p>
+                </div>
 
-                <div className="space-y-4">
-                  {/* Logout all devices */}
-                  <div className="p-5 rounded-xl" style={{ border: '1px solid #fee2e2', background: '#fff5f5' }}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-bold text-gray-900 mb-0.5">Sign out everywhere</p>
-                        <p className="text-xs text-gray-500">Log out of all devices and sessions immediately.</p>
-                      </div>
-                      <button
-                        onClick={() => { if (window.confirm('Sign out of all devices?')) logout(); }}
-                        className="flex-shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105"
-                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
-                      >
-                        Sign Out All
-                      </button>
+                <div className="space-y-4 max-w-xl">
+                  {/* Sign out all devices */}
+                  <div className="p-5 rounded-2xl bg-rose-50/40 border border-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-black text-slate-900">
+                        Sign Out of All Devices
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Immediately invalidate all active browser sessions and refresh tokens.
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Sign out of all devices immediately?')) {
+                          logout();
+                        }
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-rose-600 border-rose-200 hover:bg-rose-50 shrink-0 font-bold"
+                    >
+                      <ArrowRightOnRectangleIcon className="w-4 h-4 mr-1.5" />
+                      <span>Sign Out Everywhere</span>
+                    </Button>
                   </div>
 
-                  {/* Delete account */}
-                  <div className="p-5 rounded-xl" style={{ border: '1px solid #fee2e2', background: '#fff5f5' }}>
-                    <p className="text-sm font-bold text-gray-900 mb-0.5">Delete Account</p>
-                    <p className="text-xs text-gray-500 mb-4">
-                      Permanently delete your account and all associated data. This cannot be undone.
+                  {/* Delete Account */}
+                  <div className="p-5 rounded-2xl bg-rose-50/40 border border-rose-100 space-y-3">
+                    <div>
+                      <p className="text-xs font-black text-slate-900">
+                        Delete Customer Account
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Permanently purge your account, order archives, and personal data.
+                      </p>
+                    </div>
+
+                    <p className="text-xs font-semibold text-slate-600">
+                      Type <code className="font-mono font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">DELETE</code> to proceed:
                     </p>
-                    <p className="text-xs font-semibold text-gray-600 mb-2">
-                      Type <span className="font-mono font-black text-red-500">DELETE</span> to confirm:
-                    </p>
+
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={deleteConfirm}
-                        onChange={e => setDeleteConfirm(e.target.value)}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
                         placeholder="Type DELETE"
-                        className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono"
-                        style={{ border: '1px solid #fca5a5', background: '#fff' }}
+                        className="flex-1 px-3 py-2 text-xs font-mono bg-white border border-rose-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-rose-400"
                       />
-                      <button
+                      <Button
+                        type="button"
                         disabled={deleteConfirm !== 'DELETE'}
-                        onClick={() => toast.error('Account deletion is disabled in demo mode.')}
-                        className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
-                        style={{ background: '#dc2626' }}
+                        onClick={() => toast.error('Account deletion is disabled in development mode.')}
+                        variant="primary"
+                        size="sm"
+                        className="bg-rose-600 hover:bg-rose-700 shadow-xs disabled:opacity-30"
                       >
-                        Delete
-                      </button>
+                        <TrashIcon className="w-4 h-4 mr-1" />
+                        <span>Delete</span>
+                      </Button>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-
           </div>
         </main>
       </div>

@@ -1,29 +1,48 @@
 import ProductCard from './ProductCard';
+import { ProductCardSkeleton } from '../ui/Skeleton';
+import { EmptyState } from '../ui/EmptyState';
 
-const ProductGrid = ({ products }) => {
-  if (!products || products.length === 0) {
+const ProductGrid = ({ products = [], loading = false, onClearFilters }) => {
+  // ── Loading Skeleton State ──
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-          </svg>
-        </div>
-        <p className="text-gray-500 font-medium">No products found</p>
-        <p className="text-gray-400 text-sm mt-1">Try adjusting your filters</p>
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 font-sans">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <ProductCardSkeleton key={i} />
+        ))}
       </div>
     );
   }
 
+  // ── Empty State ──
+  if (!products || products.length === 0) {
+    return (
+      <div className="py-12">
+        <EmptyState
+          icon={
+            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+          }
+          title="No products found"
+          description="We couldn't find any items matching your selected criteria. Try adjusting or clearing your filters."
+          actionLabel={onClearFilters ? "Clear All Filters" : undefined}
+          onAction={onClearFilters}
+        />
+      </div>
+    );
+  }
+
+  // ── Render Products ──
   return (
-    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 font-sans">
       {products.map((product, index) => (
         <div
           key={product._id}
           className="animate-fadeInUp"
           style={{
-            animationDelay: `${index * 60}ms`,
+            animationDelay: `${index * 40}ms`,
             animationFillMode: 'both',
           }}
         >
@@ -35,7 +54,7 @@ const ProductGrid = ({ products }) => {
         @keyframes fadeInUp {
           from {
             opacity: 0;
-            transform: translateY(16px);
+            transform: translateY(12px);
           }
           to {
             opacity: 1;
@@ -43,7 +62,7 @@ const ProductGrid = ({ products }) => {
           }
         }
         .animate-fadeInUp {
-          animation: fadeInUp 0.4s ease-out;
+          animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
         }
       `}</style>
     </div>

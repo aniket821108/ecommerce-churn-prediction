@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { productService } from '../../services/productService';
 import { XMarkIcon, PhotoIcon, SparklesIcon } from '@heroicons/react/24/outline';
@@ -28,6 +28,24 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
     brand: productToEdit?.brand || '',
     isFeatured: Boolean(productToEdit?.isFeatured),
   });
+
+  // Escape key handler & body scroll lock
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   const mutation = useMutation({
     mutationFn: (data) =>
@@ -76,26 +94,29 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="product-form-title"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl bg-white border border-slate-200/80 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="w-full max-w-2xl bg-white border border-slate-200/80 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* ── Modal Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-slate-50/50">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-slate-50/50">
           <div className="flex items-center gap-3">
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-xs"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-xs flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
             >
               {productToEdit ? '✏️' : '✨'}
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-slate-900">
+              <h2 id="product-form-title" className="text-base font-extrabold text-slate-900">
                 {productToEdit ? 'Edit Product' : 'Create New Product'}
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="text-xs text-slate-500 font-medium truncate max-w-[200px] sm:max-w-md">
                 {productToEdit
                   ? `Updating catalog SKU: ${productToEdit.name}`
                   : 'Add a new product to your inventory catalog'}
@@ -105,7 +126,7 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400"
             aria-label="Close modal"
           >
             <XMarkIcon className="w-5 h-5" />
@@ -113,11 +134,11 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
         </div>
 
         {/* ── Form Body ── */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-4 sm:space-y-5">
           {/* Featured Toggle Banner */}
           <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-violet-50/70 border border-violet-100/80">
             <div className="flex items-center gap-2.5">
-              <SparklesIcon className="w-5 h-5 text-violet-600" />
+              <SparklesIcon className="w-5 h-5 text-violet-600 flex-shrink-0" />
               <div>
                 <p className="text-xs font-bold text-slate-900">Featured Placement</p>
                 <p className="text-[11px] text-slate-500">Showcase this item on the homepage spotlight banner</p>
@@ -126,7 +147,7 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
             <button
               type="button"
               onClick={() => setFormData((prev) => ({ ...prev, isFeatured: !prev.isFeatured }))}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 ${
                 formData.isFeatured ? 'bg-violet-600' : 'bg-slate-200'
               }`}
             >
@@ -220,7 +241,7 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
                 required
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none capitalize"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none capitalize min-h-[42px]"
               >
                 <option value="">Select...</option>
                 {categories.map((c) => (
@@ -297,18 +318,18 @@ const ProductFormModal = ({ onClose, productToEdit }) => {
         </form>
 
         {/* ── Modal Footer ── */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0 bg-slate-50/50">
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-100 flex-shrink-0 bg-slate-50/50">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors min-h-[40px] focus:outline-none focus:ring-2 focus:ring-slate-300"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={mutation.isPending}
-            className="px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50 flex items-center gap-2 min-h-[40px] focus:outline-none focus:ring-2 focus:ring-violet-400"
             style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
           >
             {mutation.isPending ? (

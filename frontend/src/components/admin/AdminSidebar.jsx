@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   HomeIcon,
@@ -7,7 +8,6 @@ import {
   ChartBarIcon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  ShoppingBagIcon as BagOutline,
 } from '@heroicons/react/24/outline';
 import useAuthStore from '../../store/authStore';
 
@@ -22,13 +22,33 @@ const AdminSidebar = ({ isOpen, onClose }) => {
     { path: '/admin/churn', label: 'Churn Analytics', icon: ChartBarIcon },
   ];
 
+  // Lock body scroll and listen for Escape key on mobile/tablet drawer mode
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   const handleNavClick = () => {
     if (onClose) onClose();
   };
 
   return (
     <>
-      {/* ── Mobile Overlay Backdrop ── */}
+      {/* ── Mobile & Tablet Overlay Backdrop ── */}
       {isOpen && (
         <div
           onClick={onClose}
@@ -39,6 +59,9 @@ const AdminSidebar = ({ isOpen, onClose }) => {
 
       {/* ── Sidebar Container ── */}
       <aside
+        role="dialog"
+        aria-modal={isOpen ? 'true' : undefined}
+        aria-label="Admin Navigation"
         className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
@@ -67,11 +90,11 @@ const AdminSidebar = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* Close button for Mobile */}
+          {/* Close button for Mobile / Tablet */}
           <button
             onClick={onClose}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            aria-label="Close menu"
+            className="lg:hidden p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+            aria-label="Close navigation menu"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
@@ -143,7 +166,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
                 logout();
               }
             }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors duration-150"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors duration-150 min-h-[40px] focus:outline-none focus:ring-2 focus:ring-rose-400"
           >
             <ArrowRightOnRectangleIcon className="w-4 h-4" />
             <span>Sign Out</span>

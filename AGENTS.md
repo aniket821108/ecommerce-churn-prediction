@@ -16,6 +16,7 @@ Welcome to the **E-Shop AI-Powered E-Commerce Platform** codebase. This guide de
 
 ## 2. Directory Structure & Key Paths
 
+- `PROGRESS.md`: Master single source of truth for project status, architecture, completed milestones, bugfixes, and AI handover log. MUST BE UPDATED after every implementation.
 - `backend/src/server.js`: Application bootstrap, MongoDB connection, Python ML warmup.
 - `backend/src/app.js`: Express middleware pipeline, route mounts, static file server for production.
 - `backend/src/controllers/`: MVC controllers (`auth`, `product`, `order`, `cart`, `admin`, `user`).

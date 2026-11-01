@@ -1,126 +1,156 @@
 import { useFormContext } from 'react-hook-form';
+import {
+  BoltIcon,
+  BanknotesIcon,
+  CreditCardIcon,
+  ShieldCheckIcon,
+} from '@heroicons/react/24/outline';
+import { Badge } from '../ui/Badge';
 
-const PAYMENT_METHODS = [
+const METHODS = [
   {
-    id: 'cash_on_delivery',
-    name: 'Cash on Delivery',
-    desc: 'Pay when your order arrives',
-    icon: '💵',
-    color: '#10b981',
-    bg: '#ecfdf5',
+    id: 'razorpay',
+    title: 'Razorpay Instant Payment',
+    badge: 'Recommended',
+    desc: 'Instant checkout via UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards, NetBanking, and Wallets.',
+    icon: <BoltIcon className="w-5 h-5 text-indigo-600" />,
+    color: 'indigo',
     active: true,
   },
   {
-    id: 'razorpay',
-    name: 'Razorpay',
-    desc: 'UPI, cards, netbanking & wallets',
-    icon: '⚡',
-    color: '#6366f1',
-    bg: '#eef2ff',
+    id: 'cash_on_delivery',
+    title: 'Cash on Delivery (COD)',
+    badge: null,
+    desc: 'Pay cash or UPI upon delivery at your doorstep when your package arrives.',
+    icon: <BanknotesIcon className="w-5 h-5 text-emerald-600" />,
+    color: 'emerald',
     active: true,
   },
   {
     id: 'stripe',
-    name: 'Credit / Debit Card',
-    desc: 'Powered by Stripe — coming soon',
-    icon: '💳',
-    color: '#0891b2',
-    bg: '#ecfeff',
-    active: false,
-  },
-  {
-    id: 'paypal',
-    name: 'PayPal',
-    desc: 'Coming soon',
-    icon: '🅿️',
-    color: '#1d4ed8',
-    bg: '#eff6ff',
+    title: 'International Card (Stripe)',
+    badge: 'Coming Soon',
+    desc: 'Direct USD/EUR international currency credit card processing.',
+    icon: <CreditCardIcon className="w-5 h-5 text-slate-400" />,
+    color: 'slate',
     active: false,
   },
 ];
 
 const PaymentMethod = () => {
-  const { register, watch, formState: { errors } } = useFormContext();
-  const selected = watch('paymentMethod');
+  const { register, watch, setValue } = useFormContext();
+  const selected = watch('paymentMethod') || 'razorpay';
 
   return (
-    <div className="rounded-2xl p-6"
-      style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>3</div>
-        <h2 className="text-base font-black text-gray-900">Payment Method</h2>
+    <div className="rounded-3xl p-6 sm:p-7 bg-white border border-slate-100 shadow-sm font-sans space-y-5">
+      <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xs">
+          3
+        </div>
+        <div>
+          <h2 className="text-base font-black text-slate-900 tracking-tight">
+            Select Payment Method
+          </h2>
+          <p className="text-xs text-slate-400 font-medium">
+            Choose your preferred secure payment instrument.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {PAYMENT_METHODS.map((method) => {
+        {METHODS.map((method) => {
           const isSelected = selected === method.id;
 
           if (!method.active) {
             return (
-              <div key={method.id}
-                className="flex items-center gap-4 p-4 rounded-xl cursor-not-allowed"
-                style={{ border: '1.5px solid #e5e7eb', background: '#fafafa', opacity: 0.45 }}>
-                <div className="w-5 h-5 rounded-full flex-shrink-0"
-                  style={{ border: '2px solid #d1d5db', background: '#fff' }} />
-                <span className="text-2xl flex-shrink-0">{method.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-500">{method.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{method.desc}</p>
+              <div
+                key={method.id}
+                className="flex items-start gap-4 p-4 rounded-2xl border border-slate-200 bg-slate-50/50 opacity-50 cursor-not-allowed"
+              >
+                <div className="w-5 h-5 rounded-full border-2 border-slate-300 mt-0.5 shrink-0" />
+                <div className="p-2 rounded-xl bg-slate-100 shrink-0">
+                  {method.icon}
                 </div>
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
-                  style={{ background: '#f1f5f9', color: '#94a3b8' }}>
-                  Coming Soon
-                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs sm:text-sm font-bold text-slate-500">
+                      {method.title}
+                    </p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                      {method.badge}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5 font-medium">
+                    {method.desc}
+                  </p>
+                </div>
               </div>
             );
           }
 
           return (
-            <label key={method.id}
-              className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-150"
-              style={{
-                border: `1.5px solid ${isSelected ? method.color : '#e5e7eb'}`,
-                background: isSelected ? method.bg : '#fafafa',
-                boxShadow: isSelected ? `0 0 0 1px ${method.color}33` : 'none',
-              }}>
-              <input type="radio" value={method.id} {...register('paymentMethod')} className="sr-only" />
-              <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                style={{
-                  border: `2px solid ${isSelected ? method.color : '#d1d5db'}`,
-                  background: isSelected ? method.color : '#fff',
-                }}>
+            <label
+              key={method.id}
+              onClick={() => setValue('paymentMethod', method.id, { shouldValidate: true })}
+              className={`flex items-start gap-4 p-4 rounded-2xl cursor-pointer transition-all border ${
+                isSelected
+                  ? 'bg-indigo-50/70 border-indigo-300 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="radio"
+                value={method.id}
+                {...register('paymentMethod')}
+                className="sr-only"
+              />
+
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0 border-2 transition-all ${
+                  isSelected
+                    ? 'border-indigo-600 bg-indigo-600'
+                    : 'border-slate-300 bg-white'
+                }`}
+              >
                 {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
-              <span className="text-2xl flex-shrink-0">{method.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900">{method.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{method.desc}</p>
+
+              <div
+                className={`p-2.5 rounded-xl shrink-0 ${
+                  isSelected ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {method.id === 'razorpay' ? (
+                  <BoltIcon className="w-5 h-5 text-current" />
+                ) : (
+                  <BanknotesIcon className="w-5 h-5 text-current" />
+                )}
               </div>
-              {isSelected && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                  style={{ background: method.bg, color: method.color }}>
-                  Selected
-                </span>
-              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs sm:text-sm font-black text-slate-900">
+                    {method.title}
+                  </p>
+                  {method.badge && (
+                    <Badge variant="primary" size="sm" className="font-bold">
+                      {method.badge}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium leading-relaxed">
+                  {method.desc}
+                </p>
+              </div>
             </label>
           );
         })}
       </div>
 
-      {errors.paymentMethod && (
-        <p className="mt-2 text-xs font-medium" style={{ color: '#ef4444' }}>
-          {errors.paymentMethod.message}
-        </p>
-      )}
-
-      <div className="flex items-center gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #f8fafc' }}>
-        <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-        <p className="text-xs text-gray-400">Your payment information is encrypted and secure.</p>
+      {/* Security Assurance Footer */}
+      <div className="pt-2 flex items-center gap-2 text-xs text-slate-400 font-medium">
+        <ShieldCheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+        <span>Cryptographically verified 256-bit HMAC transaction channel.</span>
       </div>
     </div>
   );

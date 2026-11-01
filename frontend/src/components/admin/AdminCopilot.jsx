@@ -55,8 +55,23 @@ const AdminCopilot = ({ isOpen, onClose }) => {
     if (isOpen) {
       scrollToBottom();
       setTimeout(() => inputRef.current?.focus(), 150);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape' && onClose) {
+          onClose();
+        }
+      };
+
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
-  }, [isOpen, messages]);
+  }, [isOpen, messages, onClose]);
 
   const handleSendMessage = async (textToSend) => {
     const messageText = (textToSend || input).trim();
@@ -324,15 +339,21 @@ const AdminCopilot = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden font-sans">
+    <div
+      className="fixed inset-0 z-50 overflow-hidden font-sans"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Admin Operations Copilot"
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity"
         onClick={onClose}
+        aria-hidden="true"
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+        <div className="w-screen max-w-full sm:max-w-md md:max-w-lg lg:max-w-xl bg-white shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
           
           {/* Header */}
           <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">

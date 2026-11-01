@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import useAuthStore from '../../store/authStore';
 
 const Row = ({ label, value, highlight, free, sub }) => (
   <div className="flex items-center justify-between">
@@ -10,6 +11,8 @@ const Row = ({ label, value, highlight, free, sub }) => (
 );
 
 const CartSummary = ({ subtotal = 0, discount = 0, shipping = 0, tax = 0, total = 0 }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return (
     <div className="rounded-2xl overflow-hidden sticky top-24"
       style={{ background: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
@@ -50,6 +53,14 @@ const CartSummary = ({ subtotal = 0, discount = 0, shipping = 0, tax = 0, total 
       )}
 
       <div className="px-6 pb-6">
+        {!isAuthenticated && (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
+            <p className="text-xs font-semibold text-slate-600">
+              ⚡ Guest checkout: You can sign in or register to complete your order.
+            </p>
+          </div>
+        )}
+
         <Link to="/checkout"
           className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-black text-sm text-white transition-all hover:scale-[1.01] active:scale-95"
           style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}>

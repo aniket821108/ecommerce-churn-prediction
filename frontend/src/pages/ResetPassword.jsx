@@ -5,178 +5,180 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import api from '../services/api';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
+import {
+  LockClosedIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ArrowLeftIcon,
+} from '@heroicons/react/24/outline';
 
-const schema = z.object({
-  password: z.string()
-    .min(8, 'At least 8 characters')
-    .regex(/[A-Z]/, 'Must contain uppercase letter')
-    .regex(/[a-z]/, 'Must contain lowercase letter')
-    .regex(/\d/, 'Must contain a number')
-    .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'Must contain special character'),
-  confirmPassword: z.string(),
-}).refine(d => d.password === d.confirmPassword, {
-  message: "Passwords don't match", path: ['confirmPassword'],
-});
-
-const getStrength = (pw) => {
-  let s = 0;
-  if (!pw) return s;
-  if (pw.length >= 8) s++;
-  if (/[A-Z]/.test(pw)) s++;
-  if (/[0-9]/.test(pw)) s++;
-  if (/[^A-Za-z0-9]/.test(pw)) s++;
-  return s;
-};
-const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-const strengthColor = ['', '#EF4444', '#F59E0B', '#3B82F6', '#10B981'];
-
-const rules = [
-  { label: 'At least 8 characters', test: pw => pw.length >= 8 },
-  { label: 'Uppercase letter', test: pw => /[A-Z]/.test(pw) },
-  { label: 'Lowercase letter', test: pw => /[a-z]/.test(pw) },
-  { label: 'Number', test: pw => /\d/.test(pw) },
-  { label: 'Special character', test: pw => /[^A-Za-z0-9]/.test(pw) },
-];
-
-const inputStyle = (hasError) => ({
-  width: '100%', padding: '10px 14px', borderRadius: '8px',
-  border: `1.5px solid ${hasError ? '#EF4444' : '#D1D5DB'}`,
-  fontSize: '14px', outline: 'none', boxSizing: 'border-box',
-  background: 'white', color: '#111827',
-});
+const schema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'At least 8 characters')
+      .regex(/[A-Z]/, 'Must contain uppercase letter')
+      .regex(/[a-z]/, 'Must contain lowercase letter')
+      .regex(/\d/, 'Must contain a number')
+      .regex(/[^A-Za-z0-9]/, 'Must contain a special symbol'),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 export default function ResetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const [showPw, setShowPw] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm({
     resolver: zodResolver(schema),
+    mode: 'onChange',
   });
 
   const pw = watch('password', '');
-  const strength = getStrength(pw);
+
+  const criteria = [
+    { label: 'At least 8 characters', valid: pw.length >= 8 },
+    { label: 'One uppercase letter', valid: /[A-Z]/.test(pw) },
+    { label: 'One lowercase letter', valid: /[a-z]/.test(pw) },
+    { label: 'One numeric digit', valid: /\d/.test(pw) },
+    { label: 'One special symbol', valid: /[^A-Za-z0-9]/.test(pw) },
+  ];
 
   const onSubmit = async (data) => {
+    setLoading(true);
     try {
       await api.post(`/auth/reset-password/${token}`, { password: data.password });
       setSuccess(true);
-      toast.success('Password reset successful!');
-      setTimeout(() => navigate('/login', { replace: true }), 3000);
+      toast.success('Password updated successfully! 🎉');
+      setTimeout(() => navigate('/login', { replace: true }), 2500);
     } catch (err) {
-      const msg = err.response?.data?.message || 'Reset failed';
-      setError(msg);
-      toast.error(msg);
+      toast.error(err.response?.data?.message || 'Password reset failed or token expired');
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!token) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '24px' }}>
-        <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '16px', padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-          <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>Invalid Reset Link</h2>
-          <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '24px' }}>This password reset link is invalid or missing.</p>
-          <Link to="/forgot-password" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Request a new link →</Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '24px' }}>
-      <div style={{ width: '100%', maxWidth: '440px', background: 'white', borderRadius: '16px', padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-
-        {success ? (
+    <div className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6 font-sans">
+      <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-10 shadow-xl space-y-6 text-center">
+        {!success ? (
           <>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#DCFCE7,#BBF7D0)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '32px' }}>✅</div>
-              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', marginBottom: '8px' }}>Password Reset!</h2>
-              <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '24px' }}>Your password has been updated. Redirecting to login…</p>
-              <Link to="/login" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none', fontSize: '14px' }}>Go to Login →</Link>
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mx-auto shadow-2xs">
+              <LockClosedIcon className="w-8 h-8" />
             </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                Reset your password
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                Choose a strong, memorable new password for your account.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 text-left" noValidate>
+              <Input
+                label="New Password"
+                isPassword
+                placeholder="Minimum 8 characters"
+                error={errors.password?.message}
+                {...register('password')}
+                required
+              />
+
+              {/* Password strength checklist */}
+              {pw && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-1.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Security Requirements:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {criteria.map((c) => (
+                      <div
+                        key={c.label}
+                        className={`flex items-center gap-1.5 text-xs font-semibold ${
+                          c.valid ? 'text-emerald-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {c.valid ? (
+                          <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                        ) : (
+                          <XCircleIcon className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Input
+                label="Confirm New Password"
+                isPassword
+                placeholder="Re-enter new password"
+                error={errors.confirmPassword?.message}
+                {...register('confirmPassword')}
+                required
+              />
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  isLoading={loading}
+                  loadingText="Updating password..."
+                  fullWidth
+                >
+                  Save New Password →
+                </Button>
+              </div>
+            </form>
           </>
         ) : (
-          <>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#EEF2FF,#DDD6FE)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '32px' }}>🔐</div>
+          <div className="space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 mx-auto shadow-2xs">
+              <CheckCircleIcon className="w-8 h-8" />
             </div>
 
-            <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: '8px' }}>Set New Password</h2>
-            <p style={{ color: '#6B7280', fontSize: '14px', textAlign: 'center', marginBottom: '28px' }}>
-              Choose a strong password for your account.
-            </p>
-
-            {error && (
-              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-                <p style={{ margin: 0, color: '#991B1B', fontSize: '13px' }}>{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} noValidate>
-
-              <div>
-                <label htmlFor="reset-password" style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>New Password</label>
-                <div style={{ position: 'relative' }}>
-                  <input id="reset-password" {...register('password')} type={showPw ? 'text' : 'password'}
-                    placeholder="Min 8 characters" autoComplete="new-password"
-                    aria-invalid={!!errors.password}
-                    style={{ ...inputStyle(errors.password), paddingRight: '44px' }} />
-                  <button type="button" onClick={() => setShowPw(!showPw)}
-                    aria-label={showPw ? 'Hide password' : 'Show password'}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#9CA3AF' }}>
-                    {showPw ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                {errors.password && <p role="alert" style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.password.message}</p>}
-
-                {/* Strength meter */}
-                {pw && (
-                  <div style={{ marginTop: '10px' }}>
-                    <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-                      {[1,2,3,4].map(i => (
-                        <div key={i} style={{ flex: 1, height: '3px', borderRadius: '2px', background: i <= strength ? strengthColor[strength] : '#E5E7EB', transition: 'background 0.3s' }} />
-                      ))}
-                    </div>
-                    <p style={{ fontSize: '11px', color: strengthColor[strength], marginBottom: '8px' }}>{strengthLabel[strength]} password</p>
-
-                    {/* Rules checklist */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      {rules.map(r => (
-                        <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: r.test(pw) ? '#16A34A' : '#9CA3AF' }}>
-                          <span>{r.test(pw) ? '✓' : '✗'}</span> {r.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="reset-confirm" style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Confirm Password</label>
-                <input id="reset-confirm" {...register('confirmPassword')} type="password"
-                  placeholder="Repeat password" autoComplete="new-password"
-                  aria-invalid={!!errors.confirmPassword} style={inputStyle(errors.confirmPassword)} />
-                {errors.confirmPassword && <p role="alert" style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.confirmPassword.message}</p>}
-              </div>
-
-              <button type="submit" disabled={isSubmitting} style={{
-                width: '100%', padding: '12px',
-                background: isSubmitting ? '#A5B4FC' : 'linear-gradient(135deg, #4F46E5, #7C3AED)',
-                color: 'white', border: 'none', borderRadius: '8px',
-                fontSize: '15px', fontWeight: '600', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              }}>
-                {isSubmitting ? 'Resetting…' : 'Reset Password →'}
-              </button>
-            </form>
-
-            <div style={{ textAlign: 'center', marginTop: '20px', borderTop: '1px solid #F3F4F6', paddingTop: '16px' }}>
-              <Link to="/login" style={{ fontSize: '13px', color: '#6B7280', textDecoration: 'none' }}>← Back to sign in</Link>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                Password Reset!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
+                Your password has been successfully updated. Redirecting you to sign in...
+              </p>
             </div>
-          </>
+
+            <Link to="/login" className="block pt-2">
+              <Button variant="primary" size="md" fullWidth>
+                Sign in with New Password
+              </Button>
+            </Link>
+          </div>
         )}
+
+        <div className="pt-2 border-t border-slate-100">
+          <Link
+            to="/login"
+            className="text-xs font-semibold text-slate-500 hover:text-slate-800 inline-flex items-center gap-1.5 transition-colors"
+          >
+            <ArrowLeftIcon className="w-3.5 h-3.5" />
+            <span>Back to sign in</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

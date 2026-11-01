@@ -74,3 +74,4 @@ export const RouteErrorBoundary = () => {
 };
 
 export default RouteErrorBoundary;
+

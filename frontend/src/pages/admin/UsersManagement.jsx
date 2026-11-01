@@ -20,6 +20,7 @@ const UsersManagement = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [brokenAvatarIds, setBrokenAvatarIds] = useState(new Set());
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -62,6 +63,10 @@ const UsersManagement = () => {
     }
   };
 
+  const handleAvatarError = (userId) => {
+    setBrokenAvatarIds((prev) => new Set(prev).add(userId));
+  };
+
   if (isLoading && !data) return <Loader />;
 
   return (
@@ -69,7 +74,7 @@ const UsersManagement = () => {
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
             Customer Accounts
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
@@ -90,7 +95,7 @@ const UsersManagement = () => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-10 pr-4 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none"
           />
         </div>
 
@@ -102,7 +107,7 @@ const UsersManagement = () => {
               setRoleFilter(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-700 font-medium focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none"
+            className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-700 font-medium focus:bg-white focus:ring-2 focus:ring-violet-400 focus:border-violet-500 transition-all outline-none min-h-[40px]"
           >
             <option value="">All Roles</option>
             <option value="user">Customers Only</option>
@@ -117,18 +122,19 @@ const UsersManagement = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="px-6 py-3.5">User Identity</th>
-                <th className="px-6 py-3.5">Contact Details</th>
-                <th className="px-6 py-3.5">Member Since</th>
-                <th className="px-6 py-3.5">Assigned Role</th>
-                <th className="px-6 py-3.5">Account Status</th>
-                <th className="px-6 py-3.5 text-right">Access Controls</th>
+                <th className="px-4 sm:px-6 py-3.5 whitespace-nowrap">User Identity</th>
+                <th className="px-4 sm:px-6 py-3.5 whitespace-nowrap">Contact Details</th>
+                <th className="px-4 sm:px-6 py-3.5 whitespace-nowrap">Member Since</th>
+                <th className="px-4 sm:px-6 py-3.5 whitespace-nowrap">Assigned Role</th>
+                <th className="px-4 sm:px-6 py-3.5 whitespace-nowrap">Account Status</th>
+                <th className="px-4 sm:px-6 py-3.5 text-right whitespace-nowrap">Access Controls</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {users.map((user) => {
                 const isAdmin = user.role === 'admin';
                 const avatarSrc = typeof user.avatar === 'string' ? user.avatar : user.avatar?.url;
+                const hasAvatar = avatarSrc && !brokenAvatarIds.has(user._id);
                 const initial = (user.name || 'U').charAt(0).toUpperCase();
 
                 return (
@@ -137,19 +143,24 @@ const UsersManagement = () => {
                     className="hover:bg-slate-50/80 transition-colors duration-150"
                   >
                     {/* User Identity */}
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div
                           className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0 overflow-hidden"
                           style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
                         >
-                          {avatarSrc ? (
-                            <img src={avatarSrc} alt={user.name} className="w-full h-full object-cover" />
+                          {hasAvatar ? (
+                            <img
+                              src={avatarSrc}
+                              alt={user.name}
+                              onError={() => handleAvatarError(user._id)}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
                             initial
                           )}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 max-w-[160px] sm:max-w-xs">
                           <p className="font-bold text-slate-900 truncate leading-tight">{user.name}</p>
                           <p className="text-xs text-slate-400 font-medium truncate">{user.email}</p>
                         </div>
@@ -157,7 +168,7 @@ const UsersManagement = () => {
                     </td>
 
                     {/* Contact Details */}
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                       <div>
                         <p className="font-medium text-slate-700">{user.phone || 'No phone'}</p>
                         <p className="text-xs text-slate-400">{user.address?.city || 'City unlisted'}</p>
@@ -165,12 +176,12 @@ const UsersManagement = () => {
                     </td>
 
                     {/* Member Since */}
-                    <td className="px-6 py-4 text-xs font-semibold text-slate-500">
+                    <td className="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">
                       {formatDate(user.createdAt)}
                     </td>
 
                     {/* Assigned Role */}
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                       {isAdmin ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-violet-50 text-violet-700 border border-violet-200">
                           <ShieldCheckIcon className="w-3.5 h-3.5" />
@@ -185,7 +196,7 @@ const UsersManagement = () => {
                     </td>
 
                     {/* Account Status */}
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                       {user.isActive ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700">
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -200,13 +211,14 @@ const UsersManagement = () => {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 sm:px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Toggle Role Button */}
                         <button
                           onClick={() => handleRoleToggle(user)}
-                          className="p-2 rounded-xl text-slate-500 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                          className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl text-slate-500 hover:text-violet-700 hover:bg-violet-50 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400"
                           title={`Switch role to ${isAdmin ? 'Customer' : 'Admin'}`}
+                          aria-label={`Toggle role for ${user.name}`}
                         >
                           <ShieldCheckIcon className="w-4 h-4" />
                         </button>
@@ -214,12 +226,13 @@ const UsersManagement = () => {
                         {/* Toggle Active / Deactivate */}
                         <button
                           onClick={() => handleStatusToggle(user)}
-                          className={`p-2 rounded-xl transition-colors ${
+                          className={`p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 ${
                             user.isActive
                               ? 'text-slate-500 hover:text-amber-600 hover:bg-amber-50'
                               : 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50'
                           }`}
                           title={user.isActive ? 'Suspend account' : 'Restore account'}
+                          aria-label={`${user.isActive ? 'Suspend' : 'Restore'} ${user.name}`}
                         >
                           {user.isActive ? (
                             <NoSymbolIcon className="w-4 h-4" />
@@ -235,8 +248,9 @@ const UsersManagement = () => {
                               deleteUserMutation.mutate(user._id);
                             }
                           }}
-                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-400"
                           title="Delete user"
+                          aria-label={`Delete user ${user.name}`}
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
@@ -259,7 +273,7 @@ const UsersManagement = () => {
 
         {/* ── Pagination ── */}
         {pagination.totalPages > 1 && (
-          <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">
               Showing page <strong className="text-slate-800">{page}</strong> of{' '}
               <strong className="text-slate-800">{pagination.totalPages}</strong>
@@ -268,7 +282,7 @@ const UsersManagement = () => {
               <button
                 disabled={page === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs min-h-[36px]"
               >
                 <ChevronLeftIcon className="w-3.5 h-3.5" />
                 <span>Prev</span>
@@ -276,7 +290,7 @@ const UsersManagement = () => {
               <button
                 disabled={page >= pagination.totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all shadow-xs min-h-[36px]"
               >
                 <span>Next</span>
                 <ChevronRightIcon className="w-3.5 h-3.5" />

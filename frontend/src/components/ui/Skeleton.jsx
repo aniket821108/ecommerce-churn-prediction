@@ -67,3 +67,4 @@ export const TableRowSkeleton = ({ columns = 5 }) => {
 };
 
 export default Skeleton;
+

@@ -22,9 +22,14 @@ const {
 } = require('../controllers/productController');
 
 // Configure multer for file upload
+const path = require('path');
+const fsExtra = require('fs');
+const uploadDir = path.resolve(__dirname, '../../uploads');
+if (!fsExtra.existsSync(uploadDir)) { fsExtra.mkdirSync(uploadDir, { recursive: true }); }
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
     cb(null, `${Date.now()}-${file.originalname}`);
